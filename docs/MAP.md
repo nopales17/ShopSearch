@@ -6,6 +6,8 @@ shopsearch/
 ├── README.md                 project entrypoint
 ├── docs/
 │   ├── CHARTER.md            durable product thesis + boundaries
+│   ├── PRODUCT.md            Customer Zero release specification + pending inputs
+│   ├── HYPOTHESES.md         test register + dated white-paper source/qualifications
 │   ├── STATUS.md             current working memory
 │   ├── ROADMAP.md            staged future work + falsification gates
 │   ├── ARCHITECTURE.md       module boundaries + invariants
@@ -29,16 +31,15 @@ shopsearch/
 ├── apps/
 │   └── web/                  customer + lightweight owner UI
 ├── data/
-│   ├── demo/                 local demo records/images metadata
-│   └── fixtures/             deterministic test fixtures
+│   └── demo/                 one illustrative JSON record; no image supplied
 ├── experiments/
 │   ├── search_v0/            disposable retrieval experiments
 │   └── vision_v0/            future disposable ingestion experiments
 └── tests/
-    ├── unit/
-    ├── integration/
-    └── acceptance/
+    └── README.md             test strategy only
 ```
+
+Backend modules are empty placeholders. The web directory contains a README only. `data/fixtures/` and unit/integration/acceptance test directories are planned, not implemented. Contracts express intended types; they do not yet provide validation or persistence.
 
 ## Stability rule
 If files move or module responsibilities change, update this map in the same change.

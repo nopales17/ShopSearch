@@ -1,6 +1,6 @@
 # First Six GitHub Issues
 
-Create these in order. Keep only one implementation-active at a time.
+These are local issue definitions; remote issue creation is not established. Keep one production objective active. Ordering expresses dependencies, not forced calendar delays; bounded research and continuous sales/customer discovery may proceed under AGENTS. PRODUCT is the release acceptance specification. Add telemetry with each feature, not only at Issue #5.
 
 ---
 
@@ -14,18 +14,20 @@ Create the smallest runnable skeleton for:
 Do not implement embeddings yet.
 
 ### Scope
-- establish app/backend wiring
-- load demo catalog records through a catalog interface
+- choose a minimal runtime consistent with ADR-0001; establish app/backend wiring and local/CI run commands
+- load validated, clearly labeled local fixture records through a catalog interface; resolve observation references and store/currency configuration for current callers only
 - expose a placeholder search endpoint/service
 - render placeholder visual results in the web app
-- add one acceptance test that proves the vertical slice can execute
+- persist correlated search_submitted, search_results_returned and item_opened events with session/search/store IDs
+- add one acceptance test that proves the vertical slice can execute, including persisted events
 
 ### Acceptance
 - app runs locally
-- at least 30 demo catalog records can be loaded once real images are added
+- loader supports >=30 records; fixture data is labeled and cannot masquerade as verified store inventory; actual-image acceptance belongs to Issue #2
 - search request reaches backend and returns typed results
-- UI renders returned records
-- acceptance test passes
+- UI renders returned records and an item can be opened
+- persisted event counts and correlation match the test journey
+- acceptance test passes locally and in CI; placeholder results are not represented as semantic retrieval
 
 ### Non-goals
 - vision
@@ -48,7 +50,7 @@ Each item should include where known:
 - price
 - category
 - minimal structured attributes
-- observation timestamp / provenance
+- observation timestamp / provenance (unknown capture times remain unknown), store scope and permission record
 
 Use images the project has permission to use.
 
@@ -57,6 +59,8 @@ Use images the project has permission to use.
 - records validate against catalog contracts
 - no generated image is presented as an actual physical product
 - dataset includes enough variation to test color, size, style, and price queries
+- manual capture/entry/review/correction/publication effort is recorded; simple refresh/withdrawal instructions exist
+- public wording follows PRODUCT, with unknown-price/time cases handled honestly
 
 ### Evaluation queries
 Include at least:
@@ -79,14 +83,14 @@ Return useful image results for natural-language queries.
 - precompute product image embeddings
 - embed query text
 - rank by similarity
-- apply exact `price_max` filtering deterministically
+- apply exact `price_max` filtering deterministically; parse narrow explicit price expressions, distinguish strict “under” from inclusive ceilings, display applied constraint, exclude unknown prices under a ceiling
 - keep experimental model comparison under `experiments/search_v0/`
 
 ### Acceptance
-- fixed evaluation file exists
+- fixed evaluation file and expected-relevance rubric exist before tuning, with unmatched cases and a browse/category comparison
 - at least 8/10 agreed evaluation queries have sensible top-5 results by manual judgment
-- search latency feels immediate at demo scale
-- hard price filter never returns an item above the limit
+- measure warm server p95 against the PRODUCT budget and record cold/browser-visible latency and conditions
+- hard price constraints pass boundary/unknown-price tests, including strict “under”; no failed match is returned
 - chosen baseline and weaknesses recorded in `docs/EVIDENCE.md`
 
 ### Non-goal
@@ -104,7 +108,7 @@ Prominent homepage affordance:
 `See What's In Store`
 
 Catalog page:
-`Describe what you're looking for or show us a picture`
+`Describe what you're looking for`
 
 Initial examples:
 - small blue one
@@ -112,13 +116,15 @@ Initial examples:
 - simple under $50
 
 ### Scope
+- verified local-business homepage content and browseable catalog before search
 - fast text search
 - visual result grid
 - query chips/examples
 - item detail view
 - `Get Directions`
 - `Call`
-- freshness wording such as `Recently photographed`
+- supported freshness/partial-coverage wording per PRODUCT; no unsupported “recently” label
+- loading, failure, empty and no-match states; events added with their interactions
 
 ### Acceptance
 - mobile-first
@@ -129,33 +135,37 @@ Initial examples:
 
 ---
 
-## Issue #5 — Instrument the discovery funnel
+## Issue #5 — Validate discovery instrumentation and reporting
 
 ### Goal
-Measure whether inventory discovery changes customer behavior.
+Measure discovery behavior and validate the complete funnel. This observational report does not establish causal lift.
 
 ### Required events
+- `session_started`
+- `homepage_viewed` (homepage-session denominator)
 - `catalog_opened`
 - `search_submitted`
 - `search_results_returned`
 - `zero_results`
 - `item_opened`
-- `similar_clicked`
 - `directions_clicked`
 - `call_clicked`
 
 ### Acceptance
-For each search, preserve enough context to later compute:
+`similar_clicked` and `availability_requested` remain deferred-feature event types, not required UI. Add/validate event payload contracts only for shipped callers.
+
+For each search, preserve original query, parsed filters, event/search/session/store IDs, returned item IDs/ranks/count, catalog/index version and displayed observation context. Preserve enough context to compute:
 - unique search sessions
 - result count
 - zero-result rate
 - clicked items
 - direction/call actions after search
 
-Do not infer a purchase from a direction click.
+Do not infer a purchase from a direction or call click. Sessions are not unique people. Distinguish test traffic and browsing actions without a search; validate retries/duplicate prevention. Nearest-neighbor counts do not establish suitable matches, physical availability or unmet demand. Set retention/access and applicable public telemetry notice settings before launch.
 
 ### Output
 Provide one simple internal report showing:
+- homepage/catalog sessions and defined funnel denominators
 - catalog opens
 - searches
 - zero-result searches
@@ -180,7 +190,8 @@ Customers care about seeing/searching actual local inventory before visiting.
 - real store branding/content
 - manually curated first inventory set
 - record baseline Google/site metrics where available
-- define 2–4 week observation window
+- define 2–4 week observation window, eligible traffic minimum, denominators and decision thresholds before measurement
+- resolve PRODUCT public-release dependencies; verify backup/rollback, refresh responsibility and actual event/report behavior
 
 ### Primary metrics
 - catalog-open rate
@@ -199,9 +210,8 @@ Record:
 ### Decision gate
 Do not begin production shelf-photo ingestion merely because it is technically interesting.
 
-Proceed only if:
-- customer behavior shows meaningful inventory-discovery use,
-or
-- a specific usability problem plausibly explains weak use and is cheap to test.
+Production ingestion promotion requires customer-discovery value plus a bounded H2 experiment demonstrating lower total human effort at acceptable publication quality. Record an explicit trunk decision.
+
+A specific plausible usability problem earns a cheap UX test and remeasurement, not production vision. Insufficient traffic is inconclusive. Evaluate browsing value and incremental search separately. Bounded offline research may run alongside this observation window under AGENTS; no fixed waiting period is imposed on research or sales.
 
 Document the result in `docs/EVIDENCE.md`.

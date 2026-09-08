@@ -51,7 +51,7 @@ Evidence-aware reasoning can eventually use inventory, intent, and outcomes to i
 These hypotheses must be tested separately.
 
 ## Current scope
-The current project proves H1 first.
+The current project tests H1 first; no hypothesis has been established yet. See `PRODUCT.md` for release scope and `HYPOTHESES.md` for separate tests and promotion gates.
 
 Use a manually curated catalog before automating ingestion.
 

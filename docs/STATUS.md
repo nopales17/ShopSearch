@@ -1,44 +1,34 @@
 # Current Status
 
-## Phase
-Phase 1 — customer search proof.
+Updated 2026-09-08.
 
-## Last known good
-Repository bootstrap only.
+## Phase and last known good
+Phase 1 — customer search proof, including unfinished Phase 0 prerequisites.
+Repository bootstrap and documentation only. Backend modules are empty; web/tests contain instructions; the single illustrative catalog record has no supplied image or observation provenance. No runnable app, CI, retrieval evaluation or project evidence exists yet.
+
+White-paper reconciliation completed as documentation only. PRODUCT defines the release; HYPOTHESES records dated strategic claims and gates. No production contract or ADR changed.
 
 ## Current objective
-Ship one end-to-end vertical slice:
-
-manual demo catalog → semantic search → hard filters → customer UI → telemetry.
+Deploy a polished Customer Zero website with a manually curated, honestly represented catalog of at least 30 real items, natural-language retrieval, deterministic price constraints, and validated discovery telemetry.
 
 ## Active acceptance criteria
-A local demo must:
-1. load at least 30 manually curated product records,
-2. accept free-text search,
-3. return ranked visual results,
-4. support at least one hard filter (`price_max`),
-5. log `search_submitted`, `search_results_returned`, and `item_opened`,
-6. pass a small fixed retrieval evaluation set,
-7. avoid making unsupported real-time availability claims.
+See PRODUCT for the release contract: verified mobile business site, >=30 permitted actual-item images, free-text ranked retrieval, deterministic price ceilings (including strict “under”), supported freshness wording, fixed retrieval evaluation, correlated discovery events/internal report, reproducible local/CI checks and verified deployment. These are requirements, not completed capabilities.
 
-## Current task
-Issue #1: bootstrap the runnable vertical slice and demo catalog contract.
+## Single next trunk task
+Issue #1 — bootstrap the runnable catalog → placeholder search → customer UI → persistent telemetry slice. Select a minimal runtime consistent with ADR-0001, validate clearly labeled local fixture records through a catalog interface, render typed results, record correlated search_submitted/search_results_returned/item_opened events, and add one end-to-end acceptance test plus local/CI commands. No embeddings or real-inventory claims yet. See GITHUB_ISSUES for scope and acceptance.
 
-## Blockers
-None.
+## Dependencies / blockers
+No known blocker to Issue #1. Real-photo catalog acceptance and public launch depend on founder/store inputs listed in PRODUCT; these are not assumed supplied. Runtime selection is a trunk implementation choice. No external issue creation/payment/deployment is established here.
 
-## Explicitly deferred
-- shelf-photo object detection
-- persistent item reconciliation across days
-- POS / invoice ingestion
-- owner recommendations
-- multi-store logic
-- generative product imagery
+## Dependency order (roughly 1–2 weeks, not a waiting schedule)
+1. Runnable skeleton + minimum persistent telemetry.
+2. Curated real catalog + manual effort baseline.
+3. Fixed retrieval evaluation + selected semantic baseline.
+4. Polished customer UX, events added with features.
+5. Funnel/report validation.
+6. Deploy and begin the 2–4 week usage window; insufficient traffic is inconclusive.
 
-## Next
-1. demo catalog
-2. semantic retrieval baseline
-3. customer search UI
-4. telemetry
-5. retrieval evaluation
-6. deploy first real demo
+Sales may continue throughout. Bounded research can run independently under AGENTS; no research success bypasses production promotion gates. Store #2 payment and 5–20-store repeatability are commercial tests, not reasons to add multi-store intelligence.
+
+## Explicitly deferred in production
+Shelf vision, repeated-state reconciliation, barcode/invoice/POS integrations, customer image upload/similar search, owner recommendations/SER, generalized agents, multi-store intelligence, payments, generated substitute product imagery. No research track is claimed to have run.

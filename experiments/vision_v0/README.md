@@ -1,6 +1,6 @@
 # Vision V0 Experiment
 
-Deferred until customer search value is demonstrated.
+Bounded offline research may run alongside the trunk under AGENTS: define a question, permitted dataset, time/cost budget, metric, artifact and stop/promotion criterion. Production integration remains gated on customer value and measured labor/quality benefit (ROADMAP, H2). Do not mutate production modules, dependencies or contracts from an experiment.
 
 Initial target:
 One display-case image → candidate object crops.

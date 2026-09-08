@@ -1,6 +1,9 @@
 # Roadmap
 
-Each phase must earn the next.
+Each production phase must earn promotion. PRODUCT defines the current release; HYPOTHESES defines separate tests. Dependency order is not a calendar embargo: sales/customer discovery and bounded research may run alongside the single trunk objective under AGENTS. Research artifacts do not authorize production features.
+
+## Commercial track
+Customer Zero paid website/search → unrelated Store #2 payment → 5–20-store repeatability test. Track actual payment, retention, onboarding/refresh/support labor, acquisition cost and referrals. Three to five retained stores or a referral are intermediate signals, not repeatability proof. Use a truthful curated demo before automation is ready. Pricing and financing remain hypotheses; no future technical phase is a prerequisite for starting sales discovery.
 
 ## Phase 0 — repository + website shell
 Goal:
@@ -23,7 +26,7 @@ Exit:
 - telemetry wired
 
 Falsification:
-If the search experience is not meaningfully better than simple categories/filters, do not proceed to automated ingestion.
+Evaluate incremental search value (H1b) against categories/browsing separately from actual-catalog value (H1a). If search adds little, revise/test retrieval or UX; do not infer that a useful browseable catalog has no value. Phase 1 exit is local functionality, not proof of customer value.
 
 ## Phase 2 — real usage
 Goal:
@@ -37,7 +40,9 @@ Exit evidence:
 - store-intent actions
 
 Falsification:
-If meaningful traffic exists but almost nobody uses inventory discovery, investigate UX before building vision.
+Define eligible traffic, window and thresholds before measurement. With sufficient traffic and little inventory-discovery use, run a bounded UX correction and retest; insufficient traffic is inconclusive. A plausible UX problem authorizes that test, not production vision.
+
+Production ingestion requires scoped evidence of useful catalog discovery plus a bounded H2 experiment demonstrating publication quality and lower total human effort. Record the promotion decision in STATUS; expensive automation is not justified merely by a demo.
 
 ## Phase 3 — automated ingestion
 Goal:
@@ -70,7 +75,7 @@ Turn customer interactions into scoped demand observations.
 
 Exit:
 - unique intent aggregation
-- zero-result / low-result demand
+- scoped zero-result / low-result intent, separating coverage and retrieval defects from physical absence
 - availability context
 - outcome correlations
 - no unsupported claim that search equals purchase demand
@@ -89,7 +94,7 @@ Policy outputs:
 - RECOMMEND
 
 Exit:
-Evidence-aware policy beats defined baselines in replay, simulation, or shadow evaluation on decision-quality metrics.
+Evidence-aware policy beats defined owner, simple-heuristic and LLM-only baselines on preregistered decision/probe/cost metrics using time-correct replay, simulation or shadow evaluation. Preserve trace provenance and limitations; replay cannot prove unobserved counterfactual outcomes. Contract statuses are placeholders, not implemented SER or action authority.
 
 ## Phase 7 — multi-store learning
 Goal:
@@ -99,4 +104,4 @@ Test scoped transfer across multiple stores without treating regional evidence a
 Goal:
 Test one additional irregular-inventory vertical.
 
-No horizontal platform claim before this phase.
+A successful test permits another scoped test, not an automatic horizontal platform claim. Expansion order and fundraising targets are not implementation deadlines.

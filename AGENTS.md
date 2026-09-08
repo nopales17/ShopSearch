@@ -12,9 +12,14 @@ Before making changes, read in this order:
 
 Read `docs/ROADMAP.md` only when selecting future work.
 Read relevant ADRs before changing architecture.
+Read `docs/PRODUCT.md` before product implementation. Read `docs/HYPOTHESES.md` when designing experiments, interpreting strategic sources, or proposing a promotion gate.
+
+The white paper is dated strategic context, not implementation state, measured evidence, architecture authority, or permission to expand scope. PRODUCT is the release specification; STATUS and code/tests describe progress; EVIDENCE contains actual findings.
 
 ## One active objective
-There is exactly one implementation-active milestone at a time.
+There is exactly one production implementation-active milestone at a time, owned by the trunk.
+
+Sales/customer discovery may run continuously. Bounded research may run alongside the trunk without waiting for calendar phases: specify question, dataset, budget, artifact, metric and stop/promotion criterion; keep code/results in experiments and do not mutate production contracts, dependencies or modules. Parallel work is allowed, not automatically requested. Only the trunk promotes a minimal implementation after evidence review, relevant gates, and an explicit STATUS decision (ADR if architecture changes). A research success does not automatically authorize production scope. Issue ordering expresses dependencies, not forced idle time.
 
 Do not start unrelated features because they are interesting.
 Do not skip roadmap phases without recording why in `docs/STATUS.md`.
@@ -22,7 +27,7 @@ Do not skip roadmap phases without recording why in `docs/STATUS.md`.
 ## Architecture invariants
 1. Domain logic does not depend on UI frameworks.
 2. Search ranks relevance; search does not decide inventory truth.
-3. Observations, inferred catalog identity, and availability state are distinct concepts.
+3. Observations, inferred catalog identity, availability state, and customer-facing claims are distinct concepts.
 4. LLM/model outputs are proposals or observations, never authoritative database truth by themselves.
 5. External providers enter through adapters.
 6. Experimental code stays in `experiments/` until explicitly promoted.
@@ -35,10 +40,10 @@ Do not skip roadmap phases without recording why in `docs/STATUS.md`.
 In scope now:
 - customer-facing website
 - manually curated demo catalog
-- instant semantic / visual inventory search
+- natural-language retrieval of actual product images (customer image uploads deferred)
 - hard metadata filters
 - basic telemetry
-- later: photo-assisted ingestion
+- photo-assisted ingestion remains outside current production scope; bounded research may run separately
 
 Out of scope unless the roadmap explicitly promotes it:
 - POS replacement

@@ -135,3 +135,18 @@ Until stronger integrations exist, prefer language such as:
 - "availability may have changed"
 
 Do not claim real-time stock unless supported.
+
+## Phase 1 enforcement and future compatibility
+These are implementation constraints for immediate callers, not claims that the current dataclasses enforce them. Keep ADR-0001's single deployable boundary; the suggested web framework is not an accepted second service.
+
+- Catalog owns a deterministic public representation policy. Search returns relevance and item references; a composed response may carry catalog-produced freshness fields, but search cannot derive availability or invent explanations.
+- Keep stable catalog IDs independent of photo/source IDs. Define resolvable observation references when the loader is built. Preserve source/capture time separately from import/publication time; unknown capture time cannot support recency. Store scope may come from one validated configuration in Phase 1; no tenant framework is needed.
+- Validate incoming records and event payloads at boundaries; dataclass annotations do not validate JSON. Deliberately parse decimal prices, bind currency to the store, and reject invalid references/identifiers. Implement only the fields required by the first caller.
+- Manual review authorizes initial public attributes/prices. Later model proposals must retain provenance and pass explicit review/policy before publication. A generic confidence score cannot encode evidential support or override conflicting observations.
+- Better crop quality, barcode identity, invoice receiving records and POS state are different evidence dimensions, not a universal quality/authority ladder. A barcode can identify a product type without identifying an individual specimen. Future adapters may include barcode/product databases without requiring vision; add concrete enum cases only with a real caller.
+- Explicit price constraints must be enforced before return, including strict versus inclusive bounds and unknown-price exclusion (PRODUCT). `filters_satisfied` does not permit returning failed matches. Stored embeddings/indexes are derived data, not catalog authority.
+- Telemetry persists validated append-only event snapshots with event/session/search/store IDs, result IDs/ranks/count, query/filters, catalog/index version and resolvable displayed observation context. Frozen dataclasses with mutable payloads do not ensure immutability. Prevent duplicate counts; failures are not zero-match events. Browse actions need no search ID.
+- Retain enough context to separate no results, unsuitable nearest neighbors, incomplete catalog coverage and physical absence. Neither retrieval score nor result count is an availability or demand estimate.
+- Do not implement a generic fusion graph, reconciliation engine, decision trace system, tenant framework or agent manager now. Current contracts are sketches with no deployed consumers; targeted additive changes at first use preserve these directions without speculative interfaces.
+
+Future decision work must distinguish evidence available at decision time, support/conflict roles, scope, action consequence, authorization, probes and outcomes. Preserve these semantics in research artifacts first. The decision contract does not yet implement SER, and its status vocabulary remains provisional (H4).
