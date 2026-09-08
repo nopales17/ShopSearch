@@ -42,12 +42,22 @@ class ItemObservation:
 @dataclass
 class CatalogItem:
     item_id: str
+    store_id: str
     title: str | None = None
     category: str | None = None
     price: Decimal | None = None
     image_uri: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
     evidence: list[EvidenceRef] = field(default_factory=list)
+    is_fixture: bool = False
+
+
+@dataclass(frozen=True)
+class StoreConfiguration:
+    store_id: str
+    display_name: str
+    currency: str
+    timezone: str
 
 
 @dataclass(frozen=True)

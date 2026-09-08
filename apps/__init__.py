@@ -1,0 +1,1 @@
+"""ShopSearch application entry points."""

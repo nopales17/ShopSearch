@@ -20,3 +20,11 @@ class SearchResult:
     filters_satisfied: bool
     rank: int
     explanation: str | None = None
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    search_id: str
+    catalog_version: str
+    results: tuple[SearchResult, ...]
+    is_placeholder: bool = True

@@ -25,4 +25,6 @@ class TelemetryEvent:
     event_type: EventType
     occurred_at: datetime
     session_id: str
+    store_id: str
+    search_id: str | None = None
     payload: dict[str, Any] = field(default_factory=dict)

@@ -2,7 +2,10 @@
 
 ```text
 shopsearch/
+├── .github/workflows/ci.yml   Python 3.11/3.12 checks
 ├── AGENTS.md                 agent operating constraints
+├── Makefile                  local run/test/check commands
+├── requirements-dev.txt      pinned lint/type tools; no runtime dependencies
 ├── README.md                 project entrypoint
 ├── docs/
 │   ├── CHARTER.md            durable product thesis + boundaries
@@ -22,24 +25,26 @@ shopsearch/
 │   └── decision.py           future evidence-aware recommendation contract
 ├── backend/
 │   ├── domain/               pure domain logic
-│   ├── catalog/              catalog implementation
-│   ├── search/               retrieval/ranking implementation
+│   ├── catalog/              fixture catalog validation/loading
+│   ├── search/               deterministic placeholder ranking
 │   ├── ingestion/            ingestion adapters
-│   ├── telemetry/            event persistence/aggregation
+│   ├── telemetry/            local append-only JSONL persistence
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             DB/model/external-provider integrations
 ├── apps/
-│   └── web/                  customer + lightweight owner UI
+│   └── web/                  stdlib customer fixture UI + server/static CSS
 ├── data/
-│   └── demo/                 one illustrative JSON record; no image supplied
+│   └── demo/                 explicitly non-production fixture catalog + store config
 ├── experiments/
 │   ├── search_v0/            disposable retrieval experiments
 │   └── vision_v0/            future disposable ingestion experiments
 └── tests/
-    └── README.md             test strategy only
+    ├── acceptance/           end-to-end fixture browser/telemetry test
+    ├── unit/                 validation, typed search and persistence checks
+    └── README.md             test strategy and commands
 ```
 
-Backend modules are empty placeholders. The web directory contains a README only. `data/fixtures/` and unit/integration/acceptance test directories are planned, not implemented. Contracts express intended types; they do not yet provide validation or persistence.
+`backend/catalog/repository.py` validates fixture catalog records. `backend/search/placeholder.py` supplies deliberately non-semantic token ranking. `backend/telemetry/jsonl_store.py` persists append-only local JSONL event snapshots. `apps/web/server.py` composes those modules into the current one-process web application. `data/local/` is ignored runtime data. Contracts now include current store/session/search correlation fields; they do not yet provide production policy enforcement. All current catalog records and rendered visual cards are fixtures, not Customer Zero inventory.
 
 ## Stability rule
 If files move or module responsibilities change, update this map in the same change.

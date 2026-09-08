@@ -1,13 +1,37 @@
-[
-  {
-    "item_id": "demo-001",
-    "title": "Example blue glass piece",
-    "category": "glass",
-    "price": 39.99,
-    "image_uri": "/demo/demo-001.jpg",
-    "attributes": {
-      "color": "blue",
-      "size": "small"
-    }
-  }
-]
+{
+  "dataset_kind": "test_fixture",
+  "not_customer_zero_inventory": true,
+  "catalog_version": "fixture-v1",
+  "items": [
+    {"fixture": true, "item_id": "fixture-001", "title": "Blue Prism Demo Fixture", "category": "glass", "price": "39.99", "attributes": {"color": "blue", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-001", "observed_at": "2026-09-01T09:00:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-002", "title": "Clear Curve Demo Fixture", "category": "glass", "price": "44.00", "attributes": {"color": "clear", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-002", "observed_at": "2026-09-01T09:01:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-003", "title": "Colorful Swirl Demo Fixture", "category": "glass", "price": "58.00", "attributes": {"color": "multicolor", "size": "medium", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-003", "observed_at": "2026-09-01T09:02:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-004", "title": "Dark Orbit Demo Fixture", "category": "glass", "price": "72.00", "attributes": {"color": "black", "size": "medium", "style": "weird"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-004", "observed_at": "2026-09-01T09:03:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-005", "title": "Green Leaf Demo Fixture", "category": "glass", "price": "35.00", "attributes": {"color": "green", "size": "small", "style": "organic"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-005", "observed_at": "2026-09-01T09:04:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-006", "title": "Amber Ridge Demo Fixture", "category": "glass", "price": "48.00", "attributes": {"color": "amber", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-006", "observed_at": "2026-09-01T09:05:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-007", "title": "Purple Moon Demo Fixture", "category": "glass", "price": "66.00", "attributes": {"color": "purple", "size": "medium", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-007", "observed_at": "2026-09-01T09:06:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-008", "title": "Red Flame Demo Fixture", "category": "glass", "price": "41.00", "attributes": {"color": "red", "size": "small", "style": "bright"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-008", "observed_at": "2026-09-01T09:07:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-009", "title": "Blue Wave Demo Fixture", "category": "glass", "price": "55.00", "attributes": {"color": "blue", "size": "medium", "style": "flowing"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-009", "observed_at": "2026-09-01T09:08:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-010", "title": "Clear Tower Demo Fixture", "category": "glass", "price": "80.00", "attributes": {"color": "clear", "size": "large", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-010", "observed_at": "2026-09-01T09:09:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-011", "title": "Orange Dot Demo Fixture", "category": "accessory", "price": "18.00", "attributes": {"color": "orange", "size": "small", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-011", "observed_at": "2026-09-01T09:10:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-012", "title": "Blue Loop Demo Fixture", "category": "accessory", "price": "22.00", "attributes": {"color": "blue", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-012", "observed_at": "2026-09-01T09:11:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-013", "title": "Gold Arc Demo Fixture", "category": "accessory", "price": "29.00", "attributes": {"color": "gold", "size": "small", "style": "minimal"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-013", "observed_at": "2026-09-01T09:12:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-014", "title": "Pink Bloom Demo Fixture", "category": "glass", "price": "63.00", "attributes": {"color": "pink", "size": "medium", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-014", "observed_at": "2026-09-01T09:13:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-015", "title": "White Cloud Demo Fixture", "category": "glass", "price": "52.00", "attributes": {"color": "white", "size": "medium", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-015", "observed_at": "2026-09-01T09:14:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-016", "title": "Black Spike Demo Fixture", "category": "glass", "price": "89.00", "attributes": {"color": "black", "size": "large", "style": "weird"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-016", "observed_at": "2026-09-01T09:15:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-017", "title": "Teal Drop Demo Fixture", "category": "glass", "price": "47.00", "attributes": {"color": "teal", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-017", "observed_at": "2026-09-01T09:16:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-018", "title": "Yellow Sun Demo Fixture", "category": "accessory", "price": "16.00", "attributes": {"color": "yellow", "size": "small", "style": "bright"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-018", "observed_at": "2026-09-01T09:17:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-019", "title": "Blue Speckle Demo Fixture", "category": "glass", "price": "49.00", "attributes": {"color": "blue", "size": "small", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-019", "observed_at": "2026-09-01T09:18:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-020", "title": "Clear Pebble Demo Fixture", "category": "accessory", "price": "12.00", "attributes": {"color": "clear", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-020", "observed_at": "2026-09-01T09:19:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-021", "title": "Violet Twist Demo Fixture", "category": "glass", "price": "70.00", "attributes": {"color": "purple", "size": "medium", "style": "weird"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-021", "observed_at": "2026-09-01T09:20:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-022", "title": "Green Dot Demo Fixture", "category": "accessory", "price": "21.00", "attributes": {"color": "green", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-022", "observed_at": "2026-09-01T09:21:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-023", "title": "Rose Ring Demo Fixture", "category": "accessory", "price": "31.00", "attributes": {"color": "pink", "size": "small", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-023", "observed_at": "2026-09-01T09:22:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-024", "title": "Copper Fold Demo Fixture", "category": "accessory", "price": "26.00", "attributes": {"color": "copper", "size": "small", "style": "minimal"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-024", "observed_at": "2026-09-01T09:23:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-025", "title": "Blue Star Demo Fixture", "category": "glass", "price": "61.00", "attributes": {"color": "blue", "size": "medium", "style": "bright"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-025", "observed_at": "2026-09-01T09:24:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-026", "title": "Clear Line Demo Fixture", "category": "glass", "price": "46.00", "attributes": {"color": "clear", "size": "small", "style": "minimal"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-026", "observed_at": "2026-09-01T09:25:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-027", "title": "Rainbow Arc Demo Fixture", "category": "glass", "price": "77.00", "attributes": {"color": "multicolor", "size": "large", "style": "colorful"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-027", "observed_at": "2026-09-01T09:26:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-028", "title": "Gray Stone Demo Fixture", "category": "accessory", "price": "15.00", "attributes": {"color": "gray", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-028", "observed_at": "2026-09-01T09:27:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-029", "title": "Blue Mini Demo Fixture", "category": "accessory", "price": "19.00", "attributes": {"color": "blue", "size": "small", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-029", "observed_at": "2026-09-01T09:28:00+00:00"}},
+    {"fixture": true, "item_id": "fixture-030", "title": "Clear Cube Demo Fixture", "category": "glass", "price": "54.00", "attributes": {"color": "clear", "size": "medium", "style": "simple"}, "evidence": {"source_type": "manual", "source_id": "fixture-source-030", "observed_at": "2026-09-01T09:29:00+00:00"}}
+  ]
+}
