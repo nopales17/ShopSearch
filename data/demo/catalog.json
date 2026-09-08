@@ -1,0 +1,13 @@
+[
+  {
+    "item_id": "demo-001",
+    "title": "Example blue glass piece",
+    "category": "glass",
+    "price": 39.99,
+    "image_uri": "/demo/demo-001.jpg",
+    "attributes": {
+      "color": "blue",
+      "size": "small"
+    }
+  }
+]

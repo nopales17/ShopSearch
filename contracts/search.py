@@ -1,0 +1,22 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+
+
+@dataclass(frozen=True)
+class SearchQuery:
+    text: str | None = None
+    image_uri: str | None = None
+    price_max: Decimal | None = None
+    category: str | None = None
+    limit: int = 12
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    item_id: str
+    semantic_score: float
+    filters_satisfied: bool
+    rank: int
+    explanation: str | None = None

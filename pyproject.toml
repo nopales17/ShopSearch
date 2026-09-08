@@ -1,0 +1,9 @@
+[project]
+name = "shopsearch"
+version = "0.1.0"
+description = "Camera-native local retail discovery experiment"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
