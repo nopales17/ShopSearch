@@ -31,9 +31,47 @@ The project separates:
 - why architecture is shaped this way → `docs/adr/`
 - what experiments actually established → `docs/EVIDENCE.md`
 
-The dated September 2026 white paper is summarized and qualified in `docs/HYPOTHESES.md`; it is not implementation state, evidence, or a scope override. The repository now has a runnable Issue #1 fixture slice, not a public product or Customer Zero catalog.
+The dated September 2026 white paper is summarized and qualified in `docs/HYPOTHESES.md`; it is not implementation state, evidence, or a scope override. The repository has an Issue #1 fixture slice and a generic photographic pitch demo. The prospective Customer Zero has not been formally pitched; payment/willingness to pay remain unvalidated.
 
 Git remembers history. `STATUS.md` should stay current and short.
+
+## Run the photographic pitch demo
+
+P1 presents a fictional specialty shop, FORM & FIELD, using 30 permitted real-object
+photographs from the Cleveland Museum of Art's CC0 collection. These are museum
+objects, not goods offered for sale or the prospective shop's inventory. The site
+discloses manual curation and illustrative prices. Call/Directions are simulated.
+
+Use Python 3.11/3.12. First setup installs the optional pinned CLIP runtime and
+downloads model weights (several hundred MB; network required). Photos and their
+precomputed vectors are already committed. Subsequent inference works locally.
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+make pitch-setup PYTHON=.venv/bin/python
+make pitch PYTHON=.venv/bin/python
+```
+
+Open `http://127.0.0.1:8000`. Follow “See What's In Store,” then try “small blue one
+under $50,” “simple clear one,” or “colorful.” Price ceilings are deterministic;
+unknown prices are excluded. CLIP ranks image similarity without an LLM. Startup
+warms text inference. This remains a local demo, not a publicly hosted website.
+
+Pitch events persist separately to `data/local/pitch-telemetry.jsonl` with
+`pitch_demo` classification and store/session/search correlation. For another port/log:
+
+```sh
+.venv/bin/python -m apps.web.pitch_server --port 8018 --telemetry-path /tmp/pitch.jsonl
+make pitch-eval PYTHON=.venv/bin/python
+make check PYTHON=.venv/bin/python
+```
+
+The evaluator uses frozen pre-retrieval labels and writes a timestamped result under
+`data/local/pitch-evaluations/`, preserving committed history. See `experiments/search_v0/PITCH_PROTOCOL.md`,
+`docs/EVIDENCE.md` (E-001), and `data/pitch/README.md` for provenance and limitations.
+The baseline passed its narrow pitch gate; vague queries are uneven, unrelated
+queries still return neighbors, and manually tagged lexical search scored higher.
 
 ## Run the Issue #1 fixture slice
 
@@ -49,7 +87,7 @@ Open `http://127.0.0.1:8000`. Events persist to `data/local/telemetry.jsonl`, wh
 python3 -m apps.web.server --telemetry-path /tmp/shopsearch-telemetry.jsonl
 ```
 
-Requires Python 3.11+. The app has no third-party runtime dependencies. Install
+Requires Python 3.11+. The fixture mode has no third-party runtime dependencies. Install
 development-only lint/type checkers once, then run the same checks as CI:
 
 ```sh
@@ -70,5 +108,5 @@ are new interactions, not deduplicated visits. No purchase or availability is in
 The HTTP server binds loopback only and is for local development, not public hosting.
 The fixture loader deliberately rejects real catalogs. Placeholder ranking returns
 up to 12 records even when token overlap is zero. Price/category constraints work at
-the service boundary; natural-language price parsing and filter UI remain Issue #3.
+the service boundary; natural-language price parsing and filter UI are in P1 pitch mode.
 See `docs/adr/0002-local-fixture-runtime.md` for runtime/storage limits.

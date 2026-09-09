@@ -1,0 +1,21 @@
+{
+  "version": "pitch-v1-frozen-before-first-retrieval",
+  "frozen_at": "2026-09-09T05:02:56Z",
+  "judge": "Agent visual review of CC0 contact sheets and source dimensions; not an independent human panel",
+  "rubric": "2 = strong visible match to all visual terms; 1 = partial/ambiguous match; unlisted = 0. Price eligibility is deterministic and applied separately. Small is a curator judgment informed by source dimensions, not proven by image scale alone.",
+  "success_gate": "At least 8 of 10 tasks have a strong match in top 3; report nDCG@5 and precision@5 without changing labels after results. Warm uncached text encoding + ranking p95 < 1000 ms. No price violations. Price-only task passes if every returned item has a known price strictly below 50.",
+  "baseline": "Unmodified openai/clip-vit-base-patch32; raw visual query after price extraction; normalized image/text embeddings, cosine ranking, no prompt tricks, reranking or label input.",
+  "queries": [
+    {"query":"small blue one","relevance":{"128096":2,"135710":2,"144917":1,"160044":1}},
+    {"query":"colorful","relevance":{"142657":2,"160044":2,"99419":2,"93161":2,"144917":2,"136303":2,"93176":1,"93173":1,"173951":1,"296873":1}},
+    {"query":"simple clear one","relevance":{"375091":2,"128093":2,"93155":1,"127476":1,"165186":1}},
+    {"query":"dark and weird","relevance":{"144900":2,"93173":2,"296873":2,"125318":2,"105871":2,"160045":1,"165186":1,"99419":1}},
+    {"query":"under $50","price_only":true,"relevance":{}},
+    {"query":"small blue under $50","relevance":{"128096":2,"135710":2,"144917":1}},
+    {"query":"green jug","relevance":{"149153":2,"155856":1,"135711":1}},
+    {"query":"red goblet","relevance":{"125318":2}},
+    {"query":"gold vase","relevance":{"159994":2,"136303":2,"160043":2,"93161":2,"148319":2,"370537":1,"160045":1}},
+    {"query":"clear drinking glass","relevance":{"375091":2,"93155":2,"127476":2,"155856":1}}
+  ],
+  "controls":["under $1","up to $50","a running shoe","small blue one under $50"]
+}

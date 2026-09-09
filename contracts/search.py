@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -28,3 +29,7 @@ class SearchResponse:
     catalog_version: str
     results: tuple[SearchResult, ...]
     is_placeholder: bool = True
+
+
+class SearchService(Protocol):
+    def search(self, query: SearchQuery) -> SearchResponse: ...

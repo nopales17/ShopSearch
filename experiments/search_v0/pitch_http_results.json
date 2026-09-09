@@ -1,0 +1,128 @@
+{
+  "recorded_at": "2026-09-09T05:22:11.187540+00:00",
+  "scope": "30 sequential loopback HTTP requests against running warmed local pitch server; includes JSONL fsync, excludes browser rendering; mixed initial/cached queries; existing preview log, not load test",
+  "p50_ms": 2.9575414955615997,
+  "p95_ms": 33.8882920332253,
+  "samples": [
+    {
+      "query": "small blue one",
+      "round_trip_ms": 33.8882920332253
+    },
+    {
+      "query": "colorful",
+      "round_trip_ms": 582.5983330141753
+    },
+    {
+      "query": "simple clear one",
+      "round_trip_ms": 17.86737493239343
+    },
+    {
+      "query": "dark and weird",
+      "round_trip_ms": 14.72683297470212
+    },
+    {
+      "query": "under $50",
+      "round_trip_ms": 2.225541975349188
+    },
+    {
+      "query": "small blue one under $50",
+      "round_trip_ms": 2.3138339165598154
+    },
+    {
+      "query": "small blue one",
+      "round_trip_ms": 2.3655840195715427
+    },
+    {
+      "query": "colorful",
+      "round_trip_ms": 4.247749922797084
+    },
+    {
+      "query": "simple clear one",
+      "round_trip_ms": 2.427083905786276
+    },
+    {
+      "query": "dark and weird",
+      "round_trip_ms": 2.6147919707000256
+    },
+    {
+      "query": "under $50",
+      "round_trip_ms": 1.813041977584362
+    },
+    {
+      "query": "small blue one under $50",
+      "round_trip_ms": 2.7915830723941326
+    },
+    {
+      "query": "small blue one",
+      "round_trip_ms": 2.869625110179186
+    },
+    {
+      "query": "colorful",
+      "round_trip_ms": 2.585291862487793
+    },
+    {
+      "query": "simple clear one",
+      "round_trip_ms": 2.6822080835700035
+    },
+    {
+      "query": "dark and weird",
+      "round_trip_ms": 2.6472918689250946
+    },
+    {
+      "query": "under $50",
+      "round_trip_ms": 2.1435420494526625
+    },
+    {
+      "query": "small blue one under $50",
+      "round_trip_ms": 3.316374961286783
+    },
+    {
+      "query": "small blue one",
+      "round_trip_ms": 2.916791010648012
+    },
+    {
+      "query": "colorful",
+      "round_trip_ms": 2.8817090205848217
+    },
+    {
+      "query": "simple clear one",
+      "round_trip_ms": 2.9982919804751873
+    },
+    {
+      "query": "dark and weird",
+      "round_trip_ms": 3.0326249543577433
+    },
+    {
+      "query": "under $50",
+      "round_trip_ms": 2.4284590035676956
+    },
+    {
+      "query": "small blue one under $50",
+      "round_trip_ms": 3.142791101709008
+    },
+    {
+      "query": "small blue one",
+      "round_trip_ms": 3.220709040760994
+    },
+    {
+      "query": "colorful",
+      "round_trip_ms": 3.181291976943612
+    },
+    {
+      "query": "simple clear one",
+      "round_trip_ms": 3.341292031109333
+    },
+    {
+      "query": "dark and weird",
+      "round_trip_ms": 3.319083945825696
+    },
+    {
+      "query": "under $50",
+      "round_trip_ms": 3.068624995648861
+    },
+    {
+      "query": "small blue one under $50",
+      "round_trip_ms": 3.559459000825882
+    }
+  ]
+}

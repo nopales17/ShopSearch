@@ -15,7 +15,7 @@ from backend.catalog.repository import LoadedCatalog, load_fixture_catalog
 from backend.search.placeholder import PlaceholderSearchService
 from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
 from contracts.catalog import CatalogItem
-from contracts.search import SearchQuery
+from contracts.search import SearchQuery, SearchService
 from contracts.telemetry import EventType
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,7 +26,7 @@ class WebApplication:
     def __init__(self, catalog: LoadedCatalog, telemetry: JsonlTelemetryStore) -> None:
         self.catalog = catalog
         self.telemetry = telemetry
-        self.search = PlaceholderSearchService(catalog)
+        self.search: SearchService = PlaceholderSearchService(catalog)
 
     def handler(self) -> type[BaseHTTPRequestHandler]:
         application = self
@@ -220,11 +220,11 @@ class WebApplication:
         request: BaseHTTPRequestHandler,
         status: HTTPStatus,
         content_type: str,
-        body: str,
+        body: str | bytes,
         new_session: bool = False,
         session_id: str | None = None,
     ) -> None:
-        encoded = body.encode("utf-8")
+        encoded = body.encode("utf-8") if isinstance(body, str) else body
         request.send_response(status)
         request.send_header("Content-Type", content_type)
         request.send_header("Content-Length", str(len(encoded)))

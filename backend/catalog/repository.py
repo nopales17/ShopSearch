@@ -31,6 +31,7 @@ class LoadedCatalog:
     version: str
     items: tuple[CatalogItem, ...]
     observations: tuple[ItemObservation, ...]
+    dataset_kind: str = "test_fixture"
 
     def get(self, item_id: str) -> CatalogItem | None:
         return next((item for item in self.items if item.item_id == item_id), None)
@@ -55,7 +56,11 @@ class LoadedCatalog:
             "title": item.title,
             "price": str(item.price) if item.price is not None else None,
             "currency": self.store.currency,
-            "public_claim": "Demo/test fixture; no physical availability asserted",
+            "public_claim": (
+                "Curated photo demo; illustrative price; not store inventory"
+                if self.dataset_kind == "pitch_demo"
+                else "Demo/test fixture; no physical availability asserted"
+            ),
             "observations": [
                 {
                     "source_id": ref.source_id,

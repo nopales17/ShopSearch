@@ -1,16 +1,31 @@
-# Customer Zero product specification
+# Prospective Customer Zero product specification
 
-Status: accepted release scope, not implemented. Updated 2026-09-08.
+Status: accepted conditional release scope; P1 generic demo implemented, store release pending. Updated 2026-09-08. See STATUS for verification and limitations.
 
 ## Objective
 Deploy a polished Customer Zero website with a manually curated, honestly represented catalog of at least 30 real items, natural-language retrieval, deterministic price constraints, and validated discovery telemetry.
 
 ## Customer and business context
-Founder-reported on 2026-09-08: Customer Zero is a friend's newly opened smoke shop with little/no modern POS or web inventory. The friend wants to pay for a professional website. Payment, contract terms, customer usage, and repeatability have not been established in this repository.
+Founder correction on 2026-09-08: the friend's newly opened smoke shop is a prospective Customer Zero with little/no modern POS or web inventory. The concept has not yet been formally pitched. Payment and willingness to pay are unvalidated; no adoption or commercial commitment is established. This supersedes the earlier report that the friend wanted to pay.
+
+## Immediate pitch-demo milestone (P1)
+Before the full store-specific catalog workflow, build a generic specialty-retail
+pitch using 20–40 permitted real-object/product photographs, manually curated and
+unrelated to the prospective Customer Zero. Keep the Issue #1 one-process architecture.
+Home → See What's In Store → grid/text search → larger item image/details → clearly
+simulated Call/Directions. Demo prices may be assigned for testing, but must be labeled
+illustrative rather than seller quotes; unknown prices remain unknown.
+
+Precompute off-the-shelf multimodal image embeddings. Freeze relevance judgments
+before retrieval; evaluate the requested example queries plus controls. Enforce
+price constraints deterministically. Record quality, latency, failure modes and
+approximate catalog setup effort. No shelf ingestion, live stock, adoption or automatic
+catalog creation claim is allowed. Evidence supports this local demo only. The
+broader release objective below remains conditional on customer discovery.
 
 The customer is deciding whether to visit. The first value is seeing actual merchandise; incremental semantic-search value is tested separately from catalog browsing. A paid website is the entry offer, not permission to become bespoke web consulting. Store #2 must be an unrelated paying merchant; 5–20 stores are the first broader repeatability test. Prices and recurring terms remain unvalidated (H5).
 
-## Shipped customer journey
+## Required store-release customer journey
 1. Mobile-first local-business homepage with verified name, address, hours, phone, real imagery, and prominent “See What's In Store.” Use supplied social links/reviews only when verified and permitted; do not fabricate endorsements.
 2. Browse an attractive grid immediately, without submitting a query. Describe a preference using text, e.g. “small blue one,” “simple clear,” or “something colorful under $50.” Search is direct retrieval, not a chatbot conversation.
 3. Show ranked actual-product images and known prices, with the applied price constraint visible and editable. Retain query/filter state across item navigation and back navigation.

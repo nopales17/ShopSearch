@@ -15,9 +15,12 @@ from contracts.telemetry import EventType, TelemetryEvent
 
 
 class JsonlTelemetryStore:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, traffic: str = "fixture_test") -> None:
         self._path = path
         self._lock = Lock()
+        if traffic not in ("fixture_test", "pitch_demo"):
+            raise ValueError("only local demo traffic is supported")
+        self.traffic = traffic
 
     def append(self, event: TelemetryEvent) -> bool:
         """Persist an event once. Returns false for a repeated event ID."""
@@ -25,7 +28,7 @@ class JsonlTelemetryStore:
         with self._lock:
             entries = self._events()
             snapshot = _serialize(event)
-            _validate(snapshot, entries)
+            _validate(snapshot, entries, self.traffic)
             for entry in entries:
                 if entry["event_id"] == event.event_id:
                     if entry != snapshot:
@@ -57,7 +60,9 @@ def _serialize(event: TelemetryEvent) -> dict[str, Any]:
     return value
 
 
-def _validate(event: dict[str, Any], entries: list[dict[str, Any]]) -> None:
+def _validate(
+    event: dict[str, Any], entries: list[dict[str, Any]], traffic: str = "fixture_test"
+) -> None:
     for field in ("event_id", "session_id"):
         UUID(event[field])
     if not isinstance(event["store_id"], str) or not event["store_id"]:
@@ -65,8 +70,8 @@ def _validate(event: dict[str, Any], entries: list[dict[str, Any]]) -> None:
     if datetime.fromisoformat(event["occurred_at"]).tzinfo is None:
         raise ValueError("event timestamp must include a timezone")
     payload = event["payload"]
-    if payload.get("traffic") != "fixture_test":
-        raise ValueError("this store accepts fixture telemetry only")
+    if payload.get("traffic") != traffic:
+        raise ValueError("telemetry traffic scope mismatch")
     kind = event["event_type"]
     search_id = event["search_id"]
     if kind in ("search_submitted", "search_results_returned") and not search_id:
@@ -91,7 +96,12 @@ def _validate(event: dict[str, Any], entries: list[dict[str, Any]]) -> None:
             raise ValueError("result snapshots must include item and public claim")
     if kind == "item_opened" and not payload.get("item_id"):
         raise ValueError("item ID is required")
-    if search_id and kind in ("search_results_returned", "item_opened"):
+    if search_id and kind in (
+        "search_results_returned",
+        "item_opened",
+        "call_clicked",
+        "directions_clicked",
+    ):
         required_kind = (
             "search_submitted" if kind == "search_results_returned" else "search_results_returned"
         )
@@ -109,9 +119,9 @@ def _validate(event: dict[str, Any], entries: list[dict[str, Any]]) -> None:
         )
         if parent is None:
             raise ValueError("search attribution does not match session/store/catalog")
-        if kind == "item_opened" and payload["item_id"] not in [
-            r["item_id"] for r in parent["payload"]["results"]
-        ]:
+        if kind in ("item_opened", "call_clicked", "directions_clicked") and payload[
+            "item_id"
+        ] not in [r["item_id"] for r in parent["payload"]["results"]]:
             raise ValueError("item was not returned by this search")
 
 

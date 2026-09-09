@@ -1,6 +1,6 @@
 # Hypothesis register and strategic source boundary
 
-Updated 2026-09-08. All hypotheses below are untested by this project. No entries have supporting project evidence yet. Charter IDs H1–H4 are preserved; subclaims must be evaluated independently. Plans and numeric targets are not results.
+Updated 2026-09-08. E-001 supplies a narrow local retrieval feasibility result related to H1b; it does not establish incremental customer value or superiority over tagged search. Customer, commercial, automation and transfer hypotheses remain unvalidated. Charter IDs H1–H4 are preserved; subclaims must be evaluated independently. Plans and numeric targets are not results.
 
 ## Source and authority
 S1: ShopSearch — Camera-Native Discovery and Evidence-Aware Operating Intelligence for Physical Retail, White Paper + Pre-Seed Funding Narrative, September 2026, 18 pages, confidential working draft. Supplied by the founder and read completely on 2026-09-08, including figures and appendices.
@@ -8,7 +8,7 @@ Original filename: `ShopSearch_White_Paper_and_Funding_Pitch.pdf`.
 Original local location: `/Users/paolo/Downloads/ShopSearch_White_Paper_and_Funding_Pitch.pdf` (not a portable repository dependency).
 SHA-256: `d2ab78de2946aeb3226d6fa2e1506e1b4052d4da02a4cc5986a9e11c23df48e1`.
 
-S2: founder instructions and accepted repository reconstruction, 2026-09-08. Customer Zero's opportunity is founder-reported; no payment or adoption result is inferred. This register captures the operationally relevant source context so agents need not load S1 to continue.
+S2: founder instructions and accepted repository reconstruction, 2026-09-08, corrected by the founder later that day: the shop is a prospective Customer Zero, the concept has not been formally pitched, and payment/willingness to pay are unvalidated. Earlier claims of an existing paying opportunity are superseded. This register captures the operationally relevant source context so agents need not load S1 to continue.
 
 Code/tests describe implementation; STATUS records current progress; PRODUCT specifies the current release; ADRs record accepted architecture; EVIDENCE records scoped results. S1 neither overrides these nor authorizes features. Its external statistics, competitor descriptions/prices, and legal/platform statements have not been independently verified in this reconciliation. Recheck primary sources before relying on them for commercial, legal, or investment decisions.
 

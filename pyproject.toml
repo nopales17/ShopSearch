@@ -21,3 +21,8 @@ explicit_package_bases = true
 disallow_untyped_defs = true
 check_untyped_defs = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "transformers.*", "PIL.*", "huggingface_hub.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

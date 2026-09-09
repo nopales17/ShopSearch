@@ -1,0 +1,319 @@
+{
+  "recorded_at": "2026-09-09T05:09:44.467099+00:00",
+  "model_id": "openai/clip-vit-base-patch32",
+  "model_revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+  "catalog_version": "pitch-v1:bec8caf42ada50f2ec7013df1930700948d58127e3856ea69fb8433ff207b028",
+  "evaluation_sha256": "63a487da1315b36db10ffab51d6de0d90bad6dfa2ad6b10fb87cb9c7bd936153",
+  "environment": {
+    "python": "3.12.14",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "device": "cpu",
+    "threads": 4
+  },
+  "cold_init_seconds": 3.031074458034709,
+  "queries": [
+    {
+      "query": "small blue one",
+      "top5": [
+        "pitch-128096",
+        "pitch-135710",
+        "pitch-93173",
+        "pitch-160044",
+        "pitch-135711"
+      ],
+      "first_ms": 565.461833961308,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.6,
+      "ndcg_at_5": 0.9141404765548908,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-128096",
+          "pitch-135710",
+          "pitch-144917",
+          "pitch-128093",
+          "pitch-135711"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.6,
+        "ndcg_at_5": 0.9260446319296772
+      }
+    },
+    {
+      "query": "colorful",
+      "top5": [
+        "pitch-93173",
+        "pitch-144917",
+        "pitch-160045",
+        "pitch-160043",
+        "pitch-128096"
+      ],
+      "first_ms": 9.536291938275099,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.4,
+      "ndcg_at_5": 0.3270396664923996,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-136303",
+          "pitch-142657",
+          "pitch-144917",
+          "pitch-160044",
+          "pitch-173951"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 1.0,
+        "ndcg_at_5": 0.9125299483251055
+      }
+    },
+    {
+      "query": "simple clear one",
+      "top5": [
+        "pitch-375091",
+        "pitch-128096",
+        "pitch-93155",
+        "pitch-128093",
+        "pitch-93173"
+      ],
+      "first_ms": 9.68799996189773,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.6,
+      "ndcg_at_5": 0.7716238027048642,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-128093",
+          "pitch-375091",
+          "pitch-127476",
+          "pitch-128096",
+          "pitch-135710"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.6,
+        "ndcg_at_5": 0.8683595134906049
+      }
+    },
+    {
+      "query": "dark and weird",
+      "top5": [
+        "pitch-165186",
+        "pitch-93173",
+        "pitch-128096",
+        "pitch-93155",
+        "pitch-160044"
+      ],
+      "first_ms": 9.066999889910221,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.4,
+      "ndcg_at_5": 0.3270396664923996,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-105871",
+          "pitch-125318",
+          "pitch-144900",
+          "pitch-160045",
+          "pitch-165186"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 1.0,
+        "ndcg_at_5": 0.8151510484299679
+      }
+    },
+    {
+      "query": "under $50",
+      "top5": [
+        "pitch-105871",
+        "pitch-127476",
+        "pitch-128093",
+        "pitch-128096",
+        "pitch-135710"
+      ],
+      "first_ms": 0.23133400827646255,
+      "price_violations": [],
+      "passed": true
+    },
+    {
+      "query": "small blue under $50",
+      "top5": [
+        "pitch-128096",
+        "pitch-135710",
+        "pitch-135711",
+        "pitch-93173",
+        "pitch-128093"
+      ],
+      "first_ms": 8.190541993826628,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.4,
+      "ndcg_at_5": 0.9072836011519267,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-128096",
+          "pitch-135710",
+          "pitch-144917",
+          "pitch-128093",
+          "pitch-135711"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.6,
+        "ndcg_at_5": 1.0
+      }
+    },
+    {
+      "query": "green jug",
+      "top5": [
+        "pitch-149153",
+        "pitch-93173",
+        "pitch-159994",
+        "pitch-144900",
+        "pitch-136303"
+      ],
+      "first_ms": 8.895041886717081,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.2,
+      "ndcg_at_5": 0.7262287617954056,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-149153",
+          "pitch-135711",
+          "pitch-155856",
+          "pitch-370537",
+          "pitch-105871"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.6,
+        "ndcg_at_5": 1.0
+      }
+    },
+    {
+      "query": "red goblet",
+      "top5": [
+        "pitch-125318",
+        "pitch-155856",
+        "pitch-127476",
+        "pitch-148319",
+        "pitch-93161"
+      ],
+      "first_ms": 9.454624960198998,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.2,
+      "ndcg_at_5": 1.0,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-125318",
+          "pitch-127476",
+          "pitch-155856",
+          "pitch-105871",
+          "pitch-128093"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.2,
+        "ndcg_at_5": 1.0
+      }
+    },
+    {
+      "query": "gold vase",
+      "top5": [
+        "pitch-370537",
+        "pitch-93161",
+        "pitch-136303",
+        "pitch-296873",
+        "pitch-159994"
+      ],
+      "first_ms": 9.299166034907103,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.8,
+      "ndcg_at_5": 0.6278248466415495,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-136303",
+          "pitch-144900",
+          "pitch-148319",
+          "pitch-159994",
+          "pitch-160043"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.8,
+        "ndcg_at_5": 0.7860137352654726
+      }
+    },
+    {
+      "query": "clear drinking glass",
+      "top5": [
+        "pitch-375091",
+        "pitch-93155",
+        "pitch-127476",
+        "pitch-128093",
+        "pitch-155856"
+      ],
+      "first_ms": 8.992208866402507,
+      "price_violations": [],
+      "strong_hit_at_3": true,
+      "precision_at_5": 0.8,
+      "ndcg_at_5": 0.9935774939007994,
+      "passed": true,
+      "lexical": {
+        "top5": [
+          "pitch-165186",
+          "pitch-375091",
+          "pitch-93155",
+          "pitch-127476",
+          "pitch-128093"
+        ],
+        "strong_hit_at_3": true,
+        "precision_at_5": 0.6,
+        "ndcg_at_5": 0.6865746908316516
+      }
+    }
+  ],
+  "controls": {
+    "under $1": [],
+    "up to $50": [
+      "pitch-105871",
+      "pitch-127476",
+      "pitch-128093",
+      "pitch-128096",
+      "pitch-135710"
+    ],
+    "a running shoe": [
+      "pitch-148319",
+      "pitch-159994",
+      "pitch-142657",
+      "pitch-93173",
+      "pitch-144917"
+    ],
+    "small blue one under $50": [
+      "pitch-128096",
+      "pitch-135710",
+      "pitch-93173",
+      "pitch-135711",
+      "pitch-144917"
+    ]
+  },
+  "passed_queries": 10,
+  "query_count": 10,
+  "mean_ndcg_at_5": 0.7327509239704706,
+  "mean_precision_at_5": 0.48888888888888893,
+  "uncached_warm_ms": {
+    "n": 100,
+    "p50": 9.795729536563158,
+    "p95": 12.267375132068992
+  },
+  "cached_ms": {
+    "n": 100,
+    "p50": 0.6247294368222356,
+    "p95": 0.7294998504221439
+  }
+}

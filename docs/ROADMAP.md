@@ -3,7 +3,7 @@
 Each production phase must earn promotion. PRODUCT defines the current release; HYPOTHESES defines separate tests. Dependency order is not a calendar embargo: sales/customer discovery and bounded research may run alongside the single trunk objective under AGENTS. Research artifacts do not authorize production features.
 
 ## Commercial track
-Customer Zero paid website/search → unrelated Store #2 payment → 5–20-store repeatability test. Track actual payment, retention, onboarding/refresh/support labor, acquisition cost and referrals. Three to five retained stores or a referral are intermediate signals, not repeatability proof. Use a truthful curated demo before automation is ready. Pricing and financing remain hypotheses; no future technical phase is a prerequisite for starting sales discovery.
+Prospective Customer Zero pitch (not yet made; willingness to pay unvalidated) → possible paid website/search → unrelated Store #2 payment → 5–20-store repeatability test. Track actual payment, retention, onboarding/refresh/support labor, acquisition cost and referrals. Three to five retained stores or a referral are intermediate signals, not repeatability proof. Use a truthful curated demo before automation is ready. Pricing and financing remain hypotheses; no future technical phase is a prerequisite for starting sales discovery.
 
 ## Phase 0 — repository + website shell
 Goal:

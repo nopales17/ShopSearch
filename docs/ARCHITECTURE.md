@@ -150,3 +150,10 @@ These are implementation constraints for immediate callers, not claims that the 
 - Do not implement a generic fusion graph, reconciliation engine, decision trace system, tenant framework or agent manager now. Current contracts are sketches with no deployed consumers; targeted additive changes at first use preserve these directions without speculative interfaces.
 
 Future decision work must distinguish evidence available at decision time, support/conflict roles, scope, action consequence, authorization, probes and outcomes. Preserve these semantics in research artifacts first. The decision contract does not yet implement SER, and its status vocabulary remains provisional (H4).
+
+## P1 implementation
+ADR-0003 preserves the one-process runtime with an optional local CLIP adapter,
+precomputed image index and deterministic price parser. The generic photo demo has
+separate validated data and telemetry classification; its source-review observations
+do not imply capture time or stock. Catalog/search/telemetry contracts now have local
+callers; the future decision contract remains a sketch. Public deployment is pending.
