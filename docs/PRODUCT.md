@@ -8,22 +8,10 @@ Deploy a polished Customer Zero website with a manually curated, honestly repres
 ## Customer and business context
 Founder correction on 2026-09-08: the friend's newly opened smoke shop is a prospective Customer Zero with little/no modern POS or web inventory. The concept has not yet been formally pitched. Payment and willingness to pay are unvalidated; no adoption or commercial commitment is established. This supersedes the earlier report that the friend wanted to pay.
 
-## Immediate pitch-demo milestone (P1)
-Before the full store-specific catalog workflow, build a generic specialty-retail
-pitch using 20–40 permitted real-object/product photographs, manually curated and
-unrelated to the prospective Customer Zero. Keep the Issue #1 one-process architecture.
-Home → See What's In Store → grid/text search → larger item image/details → clearly
-simulated Call/Directions. Demo prices may be assigned for testing, but must be labeled
-illustrative rather than seller quotes; unknown prices remain unknown.
+## Release boundary
+This document specifies only the conditional prospective Customer Zero release. The completed generic P1 pitch is described in `STATUS.md`, `adr/0003-local-multimodal-pitch.md` and E-001; its illustrative prices and museum photographs are not store-release data. Historical P1 requirements remain in Git history.
 
-Precompute off-the-shelf multimodal image embeddings. Freeze relevance judgments
-before retrieval; evaluate the requested example queries plus controls. Enforce
-price constraints deterministically. Record quality, latency, failure modes and
-approximate catalog setup effort. No shelf ingestion, live stock, adoption or automatic
-catalog creation claim is allowed. Evidence supports this local demo only. The
-broader release objective below remains conditional on customer discovery.
-
-The customer is deciding whether to visit. The first value is seeing actual merchandise; incremental semantic-search value is tested separately from catalog browsing. A paid website is the entry offer, not permission to become bespoke web consulting. Store #2 must be an unrelated paying merchant; 5–20 stores are the first broader repeatability test. Prices and recurring terms remain unvalidated (H5).
+The customer is deciding whether to visit. The first value is seeing actual merchandise; incremental semantic-search value is tested separately from catalog browsing. `CHARTER.md` owns reusable delivery direction; `ROADMAP.md` and H5 own commercial progression. Platform embedding and asynchronous AI enrichment are not added to this release.
 
 ## Required store-release customer journey
 1. Mobile-first local-business homepage with verified name, address, hours, phone, real imagery, and prominent “See What's In Store.” Use supplied social links/reviews only when verified and permitted; do not fabricate endorsements.
@@ -37,7 +25,7 @@ No customer image upload, find-similar button, availability-request workflow, ch
 ## Representation and manual operations
 - Publish at least 30 real items with permitted usable photographs; 30–100 is the initial evaluation range, not a claim of whole-store coverage.
 - Clearly describe the catalog as a selection of photographed merchandise.
-- Curator records item ID, image source/permission, known price/category/attributes, store scope, and observation provenance. Unknown values remain unknown; no invented price, title fact, or capture timestamp.
+- Merchant input follows CHARTER's photo+price baseline; no conventional product form is required. The curator/system records item ID, image source/permission, known price/category/attributes, store scope and observation provenance. Unknown values remain unknown; no invented price, title fact or capture timestamp. This does not require an automated enrichment feature.
 - Distinguish photo capture/observation time from import/publication time. “Photographed today” requires a supported capture date in the store timezone. If capture time is unknown, omit recency claims and say availability may have changed. Prefer a dated observation to an indefinitely “recent” label.
 - Curator validates records and images, reviews public fields, publishes, and can correct or withdraw listings. Document this simple workflow and name a refresh contact before launch; no dashboard is required.
 - Measure photography, entry, review, correction, and publication time, useful items published, and coverage limitations. Manual labor is the automation comparison baseline.

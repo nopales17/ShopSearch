@@ -1,6 +1,8 @@
-# First Six GitHub Issues
+# Bootstrap issue definitions — historical reference
 
 These are local issue definitions; remote issue creation is not established. Keep one production objective active. Ordering expresses dependencies, not forced calendar delays; bounded research and continuous sales/customer discovery may proceed under AGENTS. PRODUCT is the release acceptance specification. Add telemetry with each feature, not only at Issue #5.
+
+As of 2026-09-09, preserve the six definitions below as bootstrap history, not a second live backlog. Recommendation: put future executable work in actual GitHub Issues, linking PRODUCT acceptance and relevant hypotheses rather than copying them. Before migration, inspect remote issues and reuse matches; local “Issue #N” labels are not verified remote issue numbers. Record URL mappings here once verified. No remote issue creation or migration occurred in this documentation pass. Until mapped, STATUS's current references identify the historical definitions below; STATUS continues to own the single next trunk task. New work should not be appended to this file.
 
 ---
 

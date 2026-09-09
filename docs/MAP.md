@@ -17,7 +17,7 @@ shopsearch/
 │   ├── ARCHITECTURE.md       module boundaries + invariants
 │   ├── MAP.md                this file
 │   ├── EVIDENCE.md           append-only experimental findings
-│   ├── GITHUB_ISSUES.md      first six implementation issues
+│   ├── GITHUB_ISSUES.md      historical bootstrap definitions; future remote issue mapping
 │   └── adr/                  architecture decision records
 ├── contracts/
 │   ├── catalog.py            item/observation/availability contracts

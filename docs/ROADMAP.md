@@ -3,7 +3,7 @@
 Each production phase must earn promotion. PRODUCT defines the current release; HYPOTHESES defines separate tests. Dependency order is not a calendar embargo: sales/customer discovery and bounded research may run alongside the single trunk objective under AGENTS. Research artifacts do not authorize production features.
 
 ## Commercial track
-Prospective Customer Zero pitch (not yet made; willingness to pay unvalidated) → possible paid website/search → unrelated Store #2 payment → 5–20-store repeatability test. Track actual payment, retention, onboarding/refresh/support labor, acquisition cost and referrals. Three to five retained stores or a referral are intermediate signals, not repeatability proof. Use a truthful curated demo before automation is ready. Pricing and financing remain hypotheses; no future technical phase is a prerequisite for starting sales discovery.
+Prospective Customer Zero pitch (not yet made; willingness to pay unvalidated) → actual commitment/payment → unrelated merchant payments → 5–20-store repeatability test. The friend is not Customer #1 without an actual commitment/payment; record commitment and payment separately. Use a truthful curated demo before automation is ready. H5 owns the test and per-location labor metrics; H6 owns acquisition/referral tests. Three to five retained stores or a referral are intermediate signals, not repeatability proof. Pricing and financing remain hypotheses; no future technical phase is a prerequisite for founder-led sales discovery.
 
 ## Phase 0 — repository + website shell
 Goal:
@@ -42,23 +42,23 @@ Exit evidence:
 Falsification:
 Define eligible traffic, window and thresholds before measurement. With sufficient traffic and little inventory-discovery use, run a bounded UX correction and retest; insufficient traffic is inconclusive. A plausible UX problem authorizes that test, not production vision.
 
-Production ingestion requires scoped evidence of useful catalog discovery plus a bounded H2 experiment demonstrating publication quality and lower total human effort. Record the promotion decision in STATUS; expensive automation is not justified merely by a demo.
+Production ingestion automation requires scoped evidence of useful catalog discovery plus a bounded H2 experiment beating CHARTER's individual photo+price baseline on total labor at acceptable publication quality. Record the promotion decision in STATUS; expensive automation is not justified merely by a demo.
 
-## Phase 3 — automated ingestion
+## Phase 3 — earned ingestion automation
 Goal:
-Reduce merchant cataloging labor.
+Reduce total merchant labor per correctly published and maintained item.
 
-First target:
-One display case, not the whole store.
+Candidate test:
+Whole-display scanning may be tested on one case against individual photo+price for the same assortment. It is not the assumed winner; retain the simpler workflow if automation fails to improve total effort at acceptable quality. Other permitted sources may earn a bounded test under H2d.
 
 Exit:
-- one display photo produces useful item candidates
-- human review is fast
-- usable items can be published
-- merchant labor is measured
+- matched baseline and candidate include capture, price entry, review, corrections, rejects, publication and maintenance over a defined window
+- correctly published/maintained yield and errors meet predefined quality thresholds
+- total merchant labor improves over the baseline; shifting effort to founder support is reported separately under H5
+- only the demonstrated method is promoted by the trunk; no winner means no automation promotion
 
 Primary metric:
-human seconds per 100 useful published items
+merchant minutes per correctly published/maintained item, with coverage, errors and the maintenance window reported. Comparison thresholds must be fixed before the test.
 
 ## Phase 4 — persistent physical state
 Goal:

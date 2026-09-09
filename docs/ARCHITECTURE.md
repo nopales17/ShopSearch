@@ -107,6 +107,17 @@ Never collapse these:
 
 Each is a separate claim with different support.
 
+## Representation and source semantics
+Preserve two conceptual forms that search may eventually span:
+- **Curated / authoritative representation:** an existing Shopify/POS/product record, professional listing or known structured metadata. Authority is scoped to particular supported fields and times, not blanket truth about current availability.
+- **Observed / lightweight representation:** lower-cost representation from store, display or existing merchant/social imagery, retaining explicit observation and freshness provenance without an unsupported live-stock claim.
+
+These are representation semantics, not a generic authority enum, exclusive identity classes or a new framework. The same item may have both kinds of support. A polished listing does not establish stock; a recent photo does not establish a unique identity or known price. Add structure only for an immediate caller.
+
+Future evidence-producing inputs may include individual photos, display photos, Shopify/POS records, barcode/product data, invoices/purchase records and permitted existing merchant/social imagery. Instagram/social is an optional source, not a competitor or a required workflow. Preserve source scope, permissions and supported timestamps: product records can support identity/metadata, receiving records can support receipt, imagery can support visibility, and availability/public claims need their own support. No input silently collapses these distinctions.
+
+Delivery direction belongs to `CHARTER.md`. Preserve domain/UI separation when adding a real embedding or hosted-delivery caller; do not build speculative platform adapters now.
+
 ## Initial storage
 For Phase 1:
 - JSON/SQLite is sufficient for the demo catalog and telemetry.

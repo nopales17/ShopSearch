@@ -9,7 +9,16 @@ ShopSearch tests whether modern multimodal systems can reduce that cataloging bu
 A customer deciding whether to visit a local specialty retailer.
 
 ## Initial merchant
-A nontechnical independent retailer with little or no customer-facing inventory technology.
+A nontechnical independent retailer with little or no customer-facing inventory technology is the initial wedge, not the limit of the product. Merchants with competent websites or structured catalogs may still have valuable physical assortment missing online; the segmentation hypothesis is H10 in `HYPOTHESES.md`.
+
+## Reusable product and delivery
+The scalable unit is:
+
+> merchant inventory evidence → ShopSearch representation/search → reusable customer experience
+
+Build a reusable physical-inventory representation and discovery module, not a custom web-design agency. Delivery may embed into Shopify, WordPress, Wix, Squarespace or custom sites, or use a ShopSearch-hosted storefront when the merchant lacks a competent site. Do not assume replacement of an already-good website. These are delivery directions, not implemented integrations or current release requirements; `PRODUCT.md` owns the prospective Customer Zero release.
+
+The long-term objective is to make as much physical inventory searchable as is economically practical, not to require exhaustive digitization regardless of cost.
 
 ## First customer promise
 A visitor should be able to:
@@ -28,11 +37,13 @@ should return real matching merchandise rather than generic marketing copy.
 ## First merchant promise
 The merchant should not need to understand embeddings, vector databases, agents, or AI infrastructure.
 
-The eventual merchant workflow should trend toward:
+The simplest near-term ingestion labor baseline is:
 
-> take store photos → review exceptions → inventory becomes discoverable
+> individual photo + known price → searchable
 
-But automated shelf ingestion is not required for the first proof.
+The merchant should not need to fill a conventional ecommerce product form. Curator/system work still preserves permission, provenance and truthful publication. Unknown prices remain unknown. AI may eventually propose category, visual attributes, descriptions, crops and embeddings asynchronously; proposals require appropriate validation and do not establish truth. This is workflow direction, not permission to implement enrichment now.
+
+Whole-display scanning is one candidate automation method. It must beat this baseline on total merchant labor per correctly published and maintained item; see `ROADMAP.md` and H2. The first proof remains manually curated.
 
 ## Core hypotheses
 
@@ -74,3 +85,4 @@ This project is not currently:
 5. Merchant effort per useful published item is a first-class metric.
 6. Real behavior beats founder intuition.
 7. High-consequence recommendations require stronger evidence than low-risk experiments.
+8. Founder onboarding, setup and support minutes per location are first-class commercial scalability metrics, separate from merchant catalog labor. Early sales are founder-led; H5 defines the repeatability test.
