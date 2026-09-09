@@ -31,7 +31,13 @@ class PitchBoundaryTest(unittest.TestCase):
             ).hexdigest(),
         )
         catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
-        self.assertEqual(len(catalog.items), 30)
+        self.assertEqual(len(catalog.items), 90)
+        self.assertEqual(
+            index["expanded_evaluation_sha256"],
+            hashlib.sha256(
+                (ROOT / "experiments/search_v0/expanded_evaluation.json").read_bytes()
+            ).hexdigest(),
+        )
         for item in catalog.items:
             self.assertEqual(item.attributes["license"], "CC0")
             self.assertIsNone(item.attributes["photo_captured_at"])
@@ -60,13 +66,13 @@ class PitchBoundaryTest(unittest.TestCase):
         service = MultimodalSearchService(
             catalog, ROOT / "data/pitch/image_index.json", StubEncoder()
         )
-        query = SearchQuery(text="under $50", limit=40)
+        query = SearchQuery(text="under $50", limit=100)
         before = service.search(query)
         self.assertTrue(before.results)
         for result in before.results:
             self.assertLess(catalog.items_by_result(result.item_id).price, Decimal("50"))
         self.assertNotIn("pitch-159994", [r.item_id for r in before.results])
-        inclusive = service.search(SearchQuery(text="up to $50", limit=40))
+        inclusive = service.search(SearchQuery(text="up to $50", limit=100))
         self.assertIn("pitch-159994", [r.item_id for r in inclusive.results])
         self.assertEqual(service.search(SearchQuery(text="under $1")).results, ())
         for item in catalog.items:

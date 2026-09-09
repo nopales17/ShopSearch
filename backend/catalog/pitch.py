@@ -31,8 +31,8 @@ def load_pitch_catalog(path: Path) -> LoadedCatalog:
     ):
         raise CatalogValidationError("explicit pitch-demo scope required")
     records = document.get("items", [])
-    if not 20 <= len(records) <= 40:
-        raise CatalogValidationError("pitch demo requires 20–40 manually selected photographs")
+    if not 20 <= len(records) <= 100:
+        raise CatalogValidationError("pitch demo requires 20–100 permitted photographs")
     items, observations = [], []
     for record in records:
         item_id = _identifier(record, "item_id")

@@ -99,3 +99,61 @@ Use the truthful demo in the first owner conversation. With permission, capture 
 small real-store assortment and independent owner/customer query judgments before
 comparing image retrieval against tagged search and browsing. Measure full manual
 capture/entry/review effort separately. Do not start automated shelf ingestion.
+
+### E-002 — Expanded demo: fixed CLIP/lexical/hybrid comparison
+**Date:** 2026-09-09.
+
+**Scope and protocol**
+90 CC0 museum Glass objects: original 30 plus 60 deterministic additions using the
+same source API, object-title filter and category round robin. Existing metadata
+supplies added titles/tags; prices remain illustrative, capture times unknown.
+One 24-thumbnail sample reviewed; no individual agent descriptions or merchant labor
+measurement. Some objects are parts/near-lookalikes. No customer or store observations.
+
+`experiments/search_v0/EXPANDED_PROTOCOL.md` fixed the hybrid before retrieval:
+0.70 × per-query min-max CLIP + 0.30 × per-query min-max lexical; constant components
+map to zero. No tuning. New-item relevance grades were frozen source-metadata proxies,
+not independent human visual judgments. Original P1 labels and results are unchanged.
+The pinned local CLIP weights were reused. One 90-image index build took 6.89 seconds;
+one comparison ran. Fingerprints and per-query outputs are in `expanded_results.json`.
+
+**Results**
+Nine visual queries, with a separate price-only task; top-three success means at
+least one grade-2 result, not uniformly relevant results.
+
+| Evaluation scope / ranker | Mean nDCG@5 | Mean precision@5 | Strong top-three | Price violations |
+|---|---:|---:|---:|---:|
+| Original 30 replay / CLIP | 0.7328 | 0.4889 | 9/9 | 0 |
+| Original 30 replay / lexical | 0.8883 | 0.6667 | 9/9 | 0 |
+| Original 30 replay / hybrid | 0.8620 | 0.7111 | 9/9 | 0 |
+| Expanded 90 proxy / CLIP | 0.6188 | 0.5778 | 9/9 | 0 |
+| Expanded 90 proxy / lexical | 0.8746 | 0.8444 | 9/9 | 0 |
+| Expanded 90 proxy / hybrid | 0.8364 | 0.8667 | 9/9 | 0 |
+
+On expanded proxies, hybrid vs CLIP nDCG improves for “simple clear one” (0.483→0.857)
+and “red goblet” (0.573→0.958). Against lexical, hybrid regresses on “colorful”
+(0.913→0.677) and “dark and weird” (0.815→0.530), while improving “clear drinking
+glass” (0.628→0.876). All per-query results are retained, not only these examples.
+The original-30 CLIP replay reproduces E-001 metrics. Expanded metrics are not directly
+comparable evidence of a regression: the candidate pool and grading coverage differ.
+
+Nine compositional checks passed applicable price eligibility and monotonic sort
+checks, including most expensive blue, cheapest clear, colorful under $50 and
+combined semantic/price/sort requests. Semantic sorting operates on 12 closest
+eligible candidates; pure price sorting considers all known-price items. This
+establishes operator behavior, not that all candidates satisfy a visual concept.
+
+**Limitations and decision**
+Metadata-derived grades favor lexical matching and miss unstated visual relevance.
+Zero proxy grades are not verified irrelevance; original labels are agent-authored.
+Vague mood/size queries and out-of-assortment neighbors remain weaknesses. The fixed
+candidate window can exclude a visually suitable price extreme outside its top 12.
+No model fine-tuning, relevance threshold or new latency/load benchmark was performed.
+Hybrid remains evaluation-only; production relevance stays CLIP. The apparent hybrid
+gain does not provide a defensible, leakage-free promotion reason.
+
+**Does not establish / next test**
+No smoke-shop suitability, adoption, demand, price validity, automated ingestion or
+catalog-labor savings. Keep the prospective-owner pitch as the next dependency;
+later independent visual judgments and real-store tasks could discriminate retrieval
+methods without reusing metadata as both labels and ranking features.

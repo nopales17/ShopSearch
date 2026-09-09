@@ -21,7 +21,7 @@ async function search() {
     const data = await response.json();
     if (current !== sequence) return;
     results.innerHTML = data.html || '<div class="empty-results"><h2>Nothing at that price.</h2><p>Try a wider budget or a different description.<br>This is a limited demo collection, not a stock check.</p></div>';
-    summary.textContent = `${data.count} ${query ? 'results · closest visual matches' : 'objects in the demo collection'}`;
+    summary.textContent = `${data.count} ${query ? 'results' : 'objects in the demo collection'}`;
     document.querySelector('#applied-filter').textContent = data.filter_label;
     document.querySelector('#clear-search').hidden = !query && !category;
     history.replaceState(null, '', '/catalog?' + params);

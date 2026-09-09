@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from decimal import Decimal
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -37,7 +38,7 @@ class MultimodalSearchService:
             raise ValueError("non-finite embedding")
 
     def search(self, query: SearchQuery) -> SearchResponse:
-        if query.image_uri is not None or not 1 <= query.limit <= 40:
+        if query.image_uri is not None or not 1 <= query.limit <= 100:
             raise ValueError("unsupported image query or result limit")
         if query.price_max is not None and (not query.price_max.is_finite() or query.price_max < 0):
             raise ValueError("price ceiling must be finite and nonnegative")
@@ -55,6 +56,19 @@ class MultimodalSearchService:
             score = sum(a * b for a, b in zip(vector, image, strict=True)) if vector else 0.0
             scored.append((item.item_id, score))
         scored.sort(key=lambda pair: (-pair[1], pair[0]))
+        if parsed.sort != "relevance":
+            # Bound semantic candidates before price ordering; no relevance threshold.
+            # Without semantic text, order all eligible known-price items.
+            if parsed.visual:
+                scored = scored[:12]
+            direction = 1 if parsed.sort == "price_asc" else -1
+
+            def price_key(pair: tuple[str, float]) -> tuple[Decimal, str]:
+                price = self.catalog.items_by_result(pair[0]).price
+                assert price is not None  # QueryPlan excludes unknown prices for sorting.
+                return direction * price, pair[0]
+
+            scored.sort(key=price_key)
         results = tuple(
             SearchResult(item_id, score, True, rank)
             for rank, (item_id, score) in enumerate(scored[: query.limit], 1)

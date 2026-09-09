@@ -36,10 +36,10 @@ shopsearch/
 │   └── web/                  shared stdlib HTTP; fixture + photographic pitch UI
 ├── data/
 │   ├── demo/                 explicitly non-production fixture catalog + store config
-│   └── pitch/                30 CC0 photos, source catalog, selection and image index
-├── tools/                    photo preparation and offline image-index build
+│   └── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
+├── tools/                    photo preparation, mechanical expansion and offline image-index build
 ├── experiments/
-│   ├── search_v0/            frozen P1 rubric, evaluator, measured results and protocol
+│   ├── search_v0/            frozen P1 + separate expanded proxy rubric, evaluators/results/protocols
 │   └── vision_v0/            future disposable ingestion experiments
 └── tests/
     ├── acceptance/           fixture and pitch HTTP/telemetry journeys
@@ -56,6 +56,11 @@ fixture_test/pitch_demo traffic. `apps/web/pitch_server.py` reuses the Issue #1 
 boundary and composes the photographic demo; `pitch_views.py` and static pitch CSS/JS
 provide the UI. `data/local/` holds ignored model weights, preparation files and logs.
 No dataset represents Customer Zero inventory. ADR-0003 explains the pitch extension.
+
+`price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
+`tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion
+manifest. `experiments/search_v0/evaluate_expanded.py` owns the evaluation-only lexical
+and fixed hybrid comparison; neither is imported by production ranking.
 
 ## Stability rule
 If files move or module responsibilities change, update this map in the same change.

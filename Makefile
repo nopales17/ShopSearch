@@ -19,7 +19,7 @@ test:
 
 check:
 	$(PYTHON) -m compileall -q apps backend contracts tests tools experiments/search_v0
-	$(PYTHON) -m ruff check apps backend contracts tests tools experiments/search_v0/evaluate_pitch.py
-	$(PYTHON) -m ruff format --check apps backend contracts tests tools experiments/search_v0/evaluate_pitch.py
+	$(PYTHON) -m ruff check apps backend contracts tests tools experiments/search_v0
+	$(PYTHON) -m ruff format --check apps backend contracts tests tools experiments/search_v0
 	$(PYTHON) -m mypy apps backend contracts
 	$(MAKE) test

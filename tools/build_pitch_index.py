@@ -38,6 +38,9 @@ def main() -> None:
         ).hexdigest(),
         "build_seconds": time.perf_counter() - start,
     }
+    expanded = ROOT / "experiments/search_v0/expanded_evaluation.json"
+    if expanded.exists():
+        output["expanded_evaluation_sha256"] = hashlib.sha256(expanded.read_bytes()).hexdigest()
     (ROOT / "data/pitch/image_index.json").write_text(json.dumps(output) + "\n")
     print(f"Precomputed {len(vectors)} image embeddings in {output['build_seconds']:.2f}s")
 

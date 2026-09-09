@@ -50,7 +50,7 @@ def home(catalog: LoadedCatalog) -> str:
         f"""
     <main><section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="live-dot"></span> GLASS, VESSELS & CURIOUS OBJECTS</p>
     <h1>Good things.<br><em>Found here.</em></h1><p class="hero-description">A little color. An unexpected shape. Something that feels like you. Take a closer look at the collection.</p>
-    <a class="primary" href="/catalog">See What's In Store <span>↗</span></a><span class="hero-footnote">30 objects to explore · A curated demo collection</span></div>
+    <a class="primary" href="/catalog">See What's In Store <span>↗</span></a><span class="hero-footnote">{len(catalog.items)} objects to explore · A curated demo collection</span></div>
     <div class="hero-gallery"><img class="hero-main" src="/images/pitch-128096.jpg" alt="Sapphire blue glass bowl" width="600" height="720"><div class="hero-inset"><img src="/images/pitch-160044.jpg" alt="Iridescent blue and amber vase" width="320" height="420"><span>AN EYE FOR THE UNEXPECTED</span></div><span class="hero-label">01 / A STUDY IN BLUE</span></div></section>
     <section class="discover-band"><span>Don't know its name?<br><strong>Describe what catches your eye.</strong></span><a href="/catalog?q=small+blue+one">“small blue one” <span>→</span></a></section>
     <section class="featured"><div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>A few things to fall for.</h2></div><a class="text-link" href="/catalog">Explore all objects ↗</a></div><div class="product-grid">{featured}</div></section></main>""",
@@ -105,11 +105,7 @@ def result_payload(
     elapsed_ms: float,
 ) -> dict[str, object]:
     parsed = parse_price(query)
-    filter_label = ""
-    if parsed.maximum is not None:
-        filter_label = (
-            f"{'Up to' if parsed.inclusive else 'Under'} ${parsed.maximum} · illustrative prices"
-        )
+    filter_label = parsed.label()
     return {
         "html": "".join(card(item, search_id, query) for item in items),
         "count": len(items),

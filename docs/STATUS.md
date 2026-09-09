@@ -1,10 +1,10 @@
 # Current Status
 
-Updated 2026-09-08.
+Updated 2026-09-09.
 
 ## Phase and last known good
 Phase 1 — customer search proof, including unfinished Phase 0 prerequisites.
-Issue #1 remains runnable locally. P1, the authorized generic pitch demo before Issue #2, is complete: 30 CC0 real-object photographs, precomputed CLIP image embeddings, deterministic price constraints, polished homepage/catalog/search/detail UI and simulated Call/Directions with persistent correlated telemetry. These museum objects are not goods for sale or the prospective shop's inventory; prices are illustrative and capture dates unknown. No public deployment, live stock or automated ingestion is claimed.
+Issue #1 remains runnable locally. P1's generic pitch has received the authorized bounded P2 improvement: 90 CC0 real-object photographs (30 original + 60 mechanically selected), rebuilt image embeddings and compositional semantic/price/sort queries. Existing homepage/catalog/detail and simulated actions remain. These museum objects are not goods for sale or the prospective shop's inventory; prices are illustrative and capture dates unknown. No public deployment, live stock or automated ingestion is claimed.
 
 PRODUCT defines the release; HYPOTHESES records dated strategic claims and gates.
 Issue #1 added concrete store/fixture and response/event correlation fields to contracts.
@@ -12,12 +12,24 @@ ADR-0002 records the local standard-library runtime and single-writer JSONL limi
 preserving ADR-0001. ADR-0003 records P1's optional local model adapter; E-001 records its limited retrieval findings.
 
 ## Verification
-19 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+21 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation and
 concurrent duplicate-safe event writes. Compilation, Ruff lint/format and mypy pass
 on Python 3.12. Browser form submission and item detail were manually checked.
 CI uses the same checks on Python 3.11/3.12; remote CI has not been run in this pass.
 P1's frozen agent-authored rubric passed 10/10 top-three/price tasks. Mean visual precision@5 was 0.489 and graded nDCG@5 was 0.733. Warm uncached retrieval p95 was 12.27 ms locally, excluding HTTP/telemetry. The manually tagged lexical comparator scored higher nDCG@5 (0.888). “Colorful” and “dark and weird” remain weak; unrelated queries return neighbors. See E-001, the frozen rubric and raw results in experiments/search_v0. This is not customer-value or model-superiority evidence.
+
+P2 ran one index build and one preregistered CLIP/lexical/fixed-hybrid comparison.
+Expanded proxy-label nDCG@5: 0.619 / 0.875 / 0.836; precision@5: 0.578 / 0.844 / 0.867.
+All methods had strong top-three matches on 9/9 visual tasks and zero price violations.
+New labels are incomplete metadata proxies, favoring lexical retrieval; original P1
+judgments/results remain unchanged. Hybrid stays experimental; production relevance
+is still CLIP. E-002 records scope, regressions and limitations.
+
+Query plans support upper/lower bounds, inclusive between ranges and deterministic
+ascending/descending price sorting. Semantic price sorts order the 12 closest eligible
+CLIP candidates, visibly disclosed; price-only sorts consider all known-price items.
+Unknown prices cannot satisfy price-dependent queries. No relevance threshold was added.
 
 Limits: loopback-only local HTTP server; one process per JSONL file; linear log scans;
 page reloads count as new interactions. Token ranking returns up to 12 records even

@@ -1,0 +1,1291 @@
+{
+  "recorded_at": "2026-09-09T13:09:49.468809+00:00",
+  "catalog_version": "pitch-v1:ea33fe0632e5e081570912cd6ccf194323e17a036807c3771aa1c3af709464bb",
+  "evaluation_sha256": "14fae3a1b6e2f07a0abd80c6aeb55878d7e6274bc5a1929650ad4af09636ec85",
+  "index_sha256": "c9e4c09837db82d5a8f10143e181e4c27b1c869df35dc1ba67fd87fc732e4aa2",
+  "initialization_seconds": 2.866357333958149,
+  "scopes": {
+    "original_30_replay": {
+      "summary": {
+        "clip": {
+          "mean_ndcg_at_5": 0.7327509239704706,
+          "mean_precision_at_5": 0.48888888888888893,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        },
+        "lexical": {
+          "mean_ndcg_at_5": 0.8882970631413867,
+          "mean_precision_at_5": 0.6666666666666666,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        },
+        "hybrid": {
+          "mean_ndcg_at_5": 0.861965971274142,
+          "mean_precision_at_5": 0.7111111111111111,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        }
+      },
+      "queries": [
+        {
+          "query": "small blue one",
+          "clip_ms": 576.6958747990429,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-93173",
+                "pitch-160044",
+                "pitch-135711"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.9141404765548908,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-128093",
+                "pitch-135711"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.9260446319296772,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-93173",
+                "pitch-144917",
+                "pitch-160044"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9805704719000117,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "colorful",
+          "clip_ms": 10.59116586111486,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-93173",
+                "pitch-144917",
+                "pitch-160045",
+                "pitch-160043",
+                "pitch-128096"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.3270396664923996,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-136303",
+                "pitch-142657",
+                "pitch-144917",
+                "pitch-160044",
+                "pitch-173951"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.9125299483251055,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-93173",
+                "pitch-144917",
+                "pitch-142657",
+                "pitch-173951",
+                "pitch-99419"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.6765142965891183,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "simple clear one",
+          "clip_ms": 10.579082882031798,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-375091",
+                "pitch-128096",
+                "pitch-93155",
+                "pitch-128093",
+                "pitch-93173"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.7716238027048642,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128093",
+                "pitch-375091",
+                "pitch-127476",
+                "pitch-128096",
+                "pitch-135710"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.8683595134906049,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-375091",
+                "pitch-128093",
+                "pitch-128096",
+                "pitch-93155",
+                "pitch-127476"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9194888330036862,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "dark and weird",
+          "clip_ms": 11.036833049729466,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-165186",
+                "pitch-93173",
+                "pitch-128096",
+                "pitch-93155",
+                "pitch-160044"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.3270396664923996,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-105871",
+                "pitch-125318",
+                "pitch-144900",
+                "pitch-160045",
+                "pitch-165186"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.8151510484299679,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-165186",
+                "pitch-93173",
+                "pitch-160045",
+                "pitch-144900",
+                "pitch-125318"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.660839794726384,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "under $50",
+          "clip_ms": 0.08329097181558609,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-105871",
+                "pitch-127476",
+                "pitch-128093",
+                "pitch-128096",
+                "pitch-135710"
+              ],
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-105871",
+                "pitch-127476",
+                "pitch-128093",
+                "pitch-128096",
+                "pitch-135710"
+              ],
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-105871",
+                "pitch-127476",
+                "pitch-128093",
+                "pitch-128096",
+                "pitch-135710"
+              ],
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "small blue under $50",
+          "clip_ms": 9.121374925598502,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-135711",
+                "pitch-93173",
+                "pitch-128093"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.9072836011519267,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-128093",
+                "pitch-135711"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-135711",
+                "pitch-93173",
+                "pitch-144917"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.9790187994940358,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "green jug",
+          "clip_ms": 10.191624984145164,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-149153",
+                "pitch-93173",
+                "pitch-159994",
+                "pitch-144900",
+                "pitch-136303"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.2,
+              "ndcg_at_5": 0.7262287617954056,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-149153",
+                "pitch-135711",
+                "pitch-155856",
+                "pitch-370537",
+                "pitch-105871"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-149153",
+                "pitch-93173",
+                "pitch-159994",
+                "pitch-155856",
+                "pitch-144900"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.8304853296300547,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "red goblet",
+          "clip_ms": 10.904666967689991,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-125318",
+                "pitch-155856",
+                "pitch-127476",
+                "pitch-148319",
+                "pitch-93161"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.2,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-125318",
+                "pitch-127476",
+                "pitch-155856",
+                "pitch-105871",
+                "pitch-128093"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.2,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-125318",
+                "pitch-155856",
+                "pitch-127476",
+                "pitch-148319",
+                "pitch-93161"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.2,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "gold vase",
+          "clip_ms": 10.30062511563301,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-370537",
+                "pitch-93161",
+                "pitch-136303",
+                "pitch-296873",
+                "pitch-159994"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.6278248466415495,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-136303",
+                "pitch-144900",
+                "pitch-148319",
+                "pitch-159994",
+                "pitch-160043"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.7860137352654726,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-370537",
+                "pitch-93161",
+                "pitch-136303",
+                "pitch-159994",
+                "pitch-160043"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.773893196484256,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "clear drinking glass",
+          "clip_ms": 10.381374973803759,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-375091",
+                "pitch-93155",
+                "pitch-127476",
+                "pitch-128093",
+                "pitch-155856"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9935774939007994,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-165186",
+                "pitch-375091",
+                "pitch-93155",
+                "pitch-127476",
+                "pitch-128093"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.6865746908316516,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-375091",
+                "pitch-93155",
+                "pitch-127476",
+                "pitch-128093",
+                "pitch-165186"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.9368830196397312,
+              "price_violations": []
+            }
+          }
+        }
+      ]
+    },
+    "expanded_90_proxy": {
+      "summary": {
+        "clip": {
+          "mean_ndcg_at_5": 0.6187756732084461,
+          "mean_precision_at_5": 0.5777777777777778,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        },
+        "lexical": {
+          "mean_ndcg_at_5": 0.8745797964206118,
+          "mean_precision_at_5": 0.8444444444444444,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        },
+        "hybrid": {
+          "mean_ndcg_at_5": 0.8364310985403027,
+          "mean_precision_at_5": 0.8666666666666667,
+          "strong_top3_count": 9,
+          "visual_query_count": 9,
+          "hard_price_violations": 0
+        }
+      },
+      "queries": [
+        {
+          "query": "small blue one",
+          "clip_ms": 1.8654998857527971,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-157558",
+                "pitch-160979",
+                "pitch-93173"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.7878483464942911,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-128093",
+                "pitch-130647"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9306514554231109,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-93173",
+                "pitch-160044"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9306514554231109,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "colorful",
+          "clip_ms": 1.867332961410284,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-149466",
+                "pitch-338140",
+                "pitch-93173",
+                "pitch-142655",
+                "pitch-144917"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.4017180431258054,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-136303",
+                "pitch-142657",
+                "pitch-144917",
+                "pitch-160044",
+                "pitch-173951"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.9125299483251055,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-93173",
+                "pitch-144917",
+                "pitch-142657",
+                "pitch-173951",
+                "pitch-99419"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.6765142965891183,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "simple clear one",
+          "clip_ms": 2.0081251859664917,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-375091",
+                "pitch-338140",
+                "pitch-155715",
+                "pitch-144918",
+                "pitch-128096"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.2,
+              "ndcg_at_5": 0.48306700197788277,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128093",
+                "pitch-375091",
+                "pitch-127476",
+                "pitch-128096",
+                "pitch-135710"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.8683595134906049,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-375091",
+                "pitch-128093",
+                "pitch-128096",
+                "pitch-93155",
+                "pitch-338140"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.8571968910711802,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "dark and weird",
+          "clip_ms": 1.8816671799868345,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-165186",
+                "pitch-93173",
+                "pitch-338140",
+                "pitch-128096",
+                "pitch-126742"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.3270396664923996,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-105871",
+                "pitch-125318",
+                "pitch-144900",
+                "pitch-160045",
+                "pitch-165186"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.8151510484299679,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-165186",
+                "pitch-93173",
+                "pitch-160045",
+                "pitch-144900",
+                "pitch-149466"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.5296347172140421,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "under $50",
+          "clip_ms": 0.06033293902873993,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-101755",
+                "pitch-105871",
+                "pitch-125319",
+                "pitch-125610",
+                "pitch-126742"
+              ],
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-101755",
+                "pitch-105871",
+                "pitch-125319",
+                "pitch-125610",
+                "pitch-126742"
+              ],
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-101755",
+                "pitch-105871",
+                "pitch-125319",
+                "pitch-125610",
+                "pitch-126742"
+              ],
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "small blue under $50",
+          "clip_ms": 0.8693339768797159,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-157558",
+                "pitch-160979",
+                "pitch-135711"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.4,
+              "ndcg_at_5": 0.8401851084845681,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-128093",
+                "pitch-130647"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.9924746272747981,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-128096",
+                "pitch-135710",
+                "pitch-144917",
+                "pitch-135711",
+                "pitch-93173"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.9260446319296772,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "green jug",
+          "clip_ms": 1.944500021636486,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-149153",
+                "pitch-155782",
+                "pitch-128302",
+                "pitch-93173",
+                "pitch-160979"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.6,
+              "ndcg_at_5": 0.811925988329848,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-149153",
+                "pitch-130647",
+                "pitch-135711",
+                "pitch-149466",
+                "pitch-155782"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-149153",
+                "pitch-155782",
+                "pitch-160979",
+                "pitch-155794",
+                "pitch-149466"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 1.0,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "red goblet",
+          "clip_ms": 1.8610830884426832,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-125319",
+                "pitch-126742",
+                "pitch-125318",
+                "pitch-154736",
+                "pitch-127730"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.5734981610639276,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-125318",
+                "pitch-128956",
+                "pitch-105874",
+                "pitch-126012",
+                "pitch-127476"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.937708058067494,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-125318",
+                "pitch-125319",
+                "pitch-128956",
+                "pitch-154736",
+                "pitch-130647"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.9578347709816888,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "gold vase",
+          "clip_ms": 1.8385418225079775,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-160047",
+                "pitch-370537",
+                "pitch-93161",
+                "pitch-136303",
+                "pitch-296873"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.5000306091488959,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-136303",
+                "pitch-144900",
+                "pitch-148319",
+                "pitch-159994",
+                "pitch-160043"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.7860137352654726,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-370537",
+                "pitch-93161",
+                "pitch-136303",
+                "pitch-159994",
+                "pitch-160043"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.773893196484256,
+              "price_violations": []
+            }
+          }
+        },
+        {
+          "query": "clear drinking glass",
+          "clip_ms": 1.89483305439353,
+          "rankings": {
+            "clip": {
+              "top5": [
+                "pitch-375091",
+                "pitch-128956",
+                "pitch-93155",
+                "pitch-127476",
+                "pitch-127728"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.843668133758396,
+              "price_violations": []
+            },
+            "lexical": {
+              "top5": [
+                "pitch-165186",
+                "pitch-169198",
+                "pitch-375091",
+                "pitch-93155",
+                "pitch-101755"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 0.8,
+              "ndcg_at_5": 0.6283297815089527,
+              "price_violations": []
+            },
+            "hybrid": {
+              "top5": [
+                "pitch-375091",
+                "pitch-93155",
+                "pitch-128956",
+                "pitch-127476",
+                "pitch-127728"
+              ],
+              "strong_hit_at_3": true,
+              "precision_at_5": 1.0,
+              "ndcg_at_5": 0.876109927169651,
+              "price_violations": []
+            }
+          }
+        }
+      ]
+    }
+  },
+  "composition_checks": [
+    {
+      "query": "most expensive blue one",
+      "semantic": "blue one",
+      "filters": {
+        "sort": "price_desc",
+        "semantic_candidate_limit": 12
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-167864",
+        "pitch-142657",
+        "pitch-160044",
+        "pitch-144900",
+        "pitch-144917",
+        "pitch-93173",
+        "pitch-142655",
+        "pitch-160979",
+        "pitch-128096",
+        "pitch-157558",
+        "pitch-130647",
+        "pitch-135710"
+      ],
+      "prices": [
+        "85",
+        "72.00",
+        "68.00",
+        "56.00",
+        "45.00",
+        "42.00",
+        "40",
+        "40",
+        "38.00",
+        "35",
+        "30",
+        "24.00"
+      ]
+    },
+    {
+      "query": "cheapest clear one",
+      "semantic": "clear one",
+      "filters": {
+        "sort": "price_asc",
+        "semantic_candidate_limit": 12
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-144918",
+        "pitch-375091",
+        "pitch-128093",
+        "pitch-128956",
+        "pitch-93155",
+        "pitch-128096",
+        "pitch-142655",
+        "pitch-160979",
+        "pitch-127476",
+        "pitch-338140",
+        "pitch-152365",
+        "pitch-155715"
+      ],
+      "prices": [
+        "15",
+        "18.00",
+        "28.00",
+        "35",
+        "36.00",
+        "38.00",
+        "40",
+        "40",
+        "46.00",
+        "65",
+        "80",
+        "90"
+      ]
+    },
+    {
+      "query": "colorful under $50",
+      "semantic": "colorful",
+      "filters": {
+        "price_max": "50",
+        "inclusive": false
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-93173",
+        "pitch-142655",
+        "pitch-144917",
+        "pitch-160045",
+        "pitch-144918",
+        "pitch-128096",
+        "pitch-173951",
+        "pitch-130647",
+        "pitch-167883",
+        "pitch-157558",
+        "pitch-105871",
+        "pitch-125610"
+      ],
+      "prices": [
+        "42.00",
+        "40",
+        "45.00",
+        "44.00",
+        "15",
+        "38.00",
+        "32.00",
+        "30",
+        "22.00",
+        "35",
+        "48.00",
+        "45"
+      ]
+    },
+    {
+      "query": "most expensive floral one",
+      "semantic": "floral one",
+      "filters": {
+        "sort": "price_desc",
+        "semantic_candidate_limit": 12
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-105874",
+        "pitch-370537",
+        "pitch-144626",
+        "pitch-296873",
+        "pitch-148319",
+        "pitch-149466",
+        "pitch-142657",
+        "pitch-160044",
+        "pitch-99419",
+        "pitch-151387",
+        "pitch-93173",
+        "pitch-173951"
+      ],
+      "prices": [
+        "95",
+        "86.00",
+        "85",
+        "78.00",
+        "75.00",
+        "75",
+        "72.00",
+        "68.00",
+        "52.00",
+        "50",
+        "42.00",
+        "32.00"
+      ]
+    },
+    {
+      "query": "cheapest blue one under $50",
+      "semantic": "blue one",
+      "filters": {
+        "price_max": "50",
+        "inclusive": false,
+        "sort": "price_asc",
+        "semantic_candidate_limit": 12
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-144918",
+        "pitch-375091",
+        "pitch-135710",
+        "pitch-135711",
+        "pitch-130647",
+        "pitch-157558",
+        "pitch-128096",
+        "pitch-142655",
+        "pitch-160979",
+        "pitch-93173",
+        "pitch-125610",
+        "pitch-144917"
+      ],
+      "prices": [
+        "15",
+        "18.00",
+        "24.00",
+        "26.00",
+        "30",
+        "35",
+        "38.00",
+        "40",
+        "40",
+        "42.00",
+        "45",
+        "45.00"
+      ]
+    },
+    {
+      "query": "blue one over $25",
+      "semantic": "blue one",
+      "filters": {
+        "price_min": "25",
+        "minimum_inclusive": false
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-128096",
+        "pitch-142655",
+        "pitch-157558",
+        "pitch-130647",
+        "pitch-93173",
+        "pitch-160044",
+        "pitch-144917",
+        "pitch-167864",
+        "pitch-160979",
+        "pitch-142657",
+        "pitch-144900",
+        "pitch-338140"
+      ],
+      "prices": [
+        "38.00",
+        "40",
+        "35",
+        "30",
+        "42.00",
+        "68.00",
+        "45.00",
+        "85",
+        "40",
+        "72.00",
+        "56.00",
+        "65"
+      ]
+    },
+    {
+      "query": "between $25 and $50",
+      "semantic": "",
+      "filters": {
+        "price_max": "50",
+        "inclusive": true,
+        "price_min": "25",
+        "minimum_inclusive": true
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-105871",
+        "pitch-125319",
+        "pitch-125610",
+        "pitch-126742",
+        "pitch-127476",
+        "pitch-127478",
+        "pitch-127730",
+        "pitch-128093",
+        "pitch-128096",
+        "pitch-128956",
+        "pitch-130647",
+        "pitch-135711"
+      ],
+      "prices": [
+        "48.00",
+        "30",
+        "45",
+        "35",
+        "46.00",
+        "25",
+        "25",
+        "28.00",
+        "38.00",
+        "35",
+        "30",
+        "26.00"
+      ]
+    },
+    {
+      "query": "most expensive one",
+      "semantic": "",
+      "filters": {
+        "sort": "price_desc",
+        "semantic_candidate_limit": null
+      },
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-120869",
+        "pitch-127475",
+        "pitch-127727",
+        "pitch-128303",
+        "pitch-93185",
+        "pitch-93161",
+        "pitch-105874",
+        "pitch-128302",
+        "pitch-169198",
+        "pitch-94984",
+        "pitch-127941",
+        "pitch-155715"
+      ],
+      "prices": [
+        "100",
+        "100",
+        "100",
+        "100",
+        "100",
+        "96.00",
+        "95",
+        "95",
+        "95",
+        "95",
+        "90",
+        "90"
+      ]
+    },
+    {
+      "query": "cool fantasy beer mug",
+      "semantic": "cool fantasy beer mug",
+      "filters": {},
+      "ordered": true,
+      "hard_price_violations": [],
+      "ids": [
+        "pitch-93155",
+        "pitch-96852",
+        "pitch-120869",
+        "pitch-125024",
+        "pitch-127475",
+        "pitch-125023",
+        "pitch-96851",
+        "pitch-93173",
+        "pitch-93161",
+        "pitch-125319",
+        "pitch-149466",
+        "pitch-138875"
+      ],
+      "prices": [
+        "36.00",
+        "75",
+        "100",
+        "85",
+        "100",
+        "80",
+        "70",
+        "42.00",
+        "96.00",
+        "30",
+        "75",
+        "40"
+      ]
+    }
+  ],
+  "hybrid_promoted": false
+}
