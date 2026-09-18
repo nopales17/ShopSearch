@@ -32,10 +32,15 @@ class MigrationTest(unittest.TestCase):
             connection = platform_db.connect(Path(directory) / "shopsearch.sqlite3")
             try:
                 applied = platform_db.apply_migrations(connection)
-                self.assertEqual(applied, ("0001_store_registry.sql", "0002_catalog_and_media.sql"))
+                migrations = (
+                    "0001_store_registry.sql",
+                    "0002_catalog_and_media.sql",
+                    "0003_embeddings_and_index_generations.sql",
+                )
+                self.assertEqual(applied, migrations)
                 self.assertEqual(
                     platform_db.applied_versions(connection),
-                    ("0001_store_registry.sql", "0002_catalog_and_media.sql"),
+                    migrations,
                 )
                 tables = {
                     row["name"]
@@ -44,7 +49,15 @@ class MigrationTest(unittest.TestCase):
                     )
                 }
                 self.assertLessEqual(
-                    {"stores", "store_domains", "items", "images", "item_events"},
+                    {
+                        "stores",
+                        "store_domains",
+                        "items",
+                        "images",
+                        "item_events",
+                        "embeddings",
+                        "store_generations",
+                    },
                     tables,
                 )
                 self.assertEqual(connection.execute("PRAGMA foreign_keys").fetchone()[0], 1)
@@ -54,7 +67,7 @@ class MigrationTest(unittest.TestCase):
                 self.assertEqual(platform_db.apply_migrations(connection), ())
                 self.assertEqual(
                     platform_db.applied_versions(connection),
-                    ("0001_store_registry.sql", "0002_catalog_and_media.sql"),
+                    migrations,
                 )
             finally:
                 connection.close()

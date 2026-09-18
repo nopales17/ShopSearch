@@ -100,6 +100,12 @@ class StorePresentation:
     credits_policy_url: str
     credits_policy_label: str
     public_claim: str
+    # S4 search-coverage disclosure wording (ADR-0005 §7). Defaults keep store
+    # records written before S4 valid.
+    coverage_disclosure_template: str = (
+        "Some objects ({excluded} of {published}) are not yet searchable by description."
+    )
+    coverage_browse_label: str = "Browse all objects"
 
 
 @dataclass(frozen=True)

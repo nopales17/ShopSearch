@@ -94,6 +94,21 @@ def _validate(
             raise ValueError("result ranks must be contiguous")
         if any(not result.get("item_id") or not result.get("public_claim") for result in results):
             raise ValueError("result snapshots must include item and public claim")
+        if traffic == "pitch_demo":
+            # The platform storefront must report honest retrieval coverage.
+            counts = {
+                field: payload.get(field)
+                for field in ("published_count", "ready_count", "excluded_unindexed_count")
+            }
+            if any(
+                isinstance(value, bool) or not isinstance(value, int) or value < 0
+                for value in counts.values()
+            ):
+                raise ValueError("search results must report published/ready/excluded counts")
+            if counts["published_count"] != (
+                counts["ready_count"] + counts["excluded_unindexed_count"]
+            ):
+                raise ValueError("search coverage counts must be consistent")
     if kind == "item_opened" and not payload.get("item_id"):
         raise ValueError("item ID is required")
     if search_id and kind in (

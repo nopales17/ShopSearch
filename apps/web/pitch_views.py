@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 from backend.catalog.read_model import LoadedCatalog
 from backend.search.price import parse_price
 from contracts.catalog import CatalogItem
+from contracts.search import SearchCoverage
 from contracts.store import HeroImage, Store, StorePresentation
 
 
@@ -121,6 +122,7 @@ def result_payload(
     query: str,
     search_id: str | None,
     elapsed_ms: float,
+    coverage: SearchCoverage | None = None,
 ) -> dict[str, object]:
     parsed = parse_price(query)
     filter_label = parsed.label()
@@ -130,7 +132,33 @@ def result_payload(
         "search_id": search_id,
         "filter_label": filter_label,
         "elapsed_ms": round(elapsed_ms, 2),
+        "coverage": (
+            {
+                "published": coverage.published,
+                "ready": coverage.ready,
+                "excluded_unindexed": coverage.excluded_unindexed,
+                "visual_text": coverage.visual_text,
+            }
+            if coverage is not None
+            else None
+        ),
+        "coverage_html": coverage_notice(store, coverage),
     }
+
+
+def coverage_notice(store: Store, coverage: SearchCoverage | None) -> str:
+    """Disclose missing description coverage; never an absence or stock claim."""
+
+    if coverage is None or not coverage.visual_text or coverage.excluded_unindexed < 1:
+        return ""
+    presentation = store.presentation
+    sentence = presentation.coverage_disclosure_template.format(
+        excluded=coverage.excluded_unindexed, published=coverage.published
+    )
+    return (
+        f'<p class="coverage-notice">{sentence} '
+        f'<a href="/catalog">{escape(presentation.coverage_browse_label)}</a></p>'
+    )
 
 
 def credits(catalog: LoadedCatalog, store: Store) -> str:

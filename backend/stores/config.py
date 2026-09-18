@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import fields
+from dataclasses import MISSING, fields
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -50,7 +50,12 @@ def presentation_from_mapping(value: Any) -> StorePresentation:
     if not isinstance(value, dict):
         raise StoreValidationError("presentation must be an object")
     expected = {field.name for field in fields(StorePresentation)}
-    missing = expected - value.keys()
+    required = {
+        field.name
+        for field in fields(StorePresentation)
+        if field.default is MISSING and field.default_factory is MISSING
+    }
+    missing = required - value.keys()
     unknown = value.keys() - expected
     if missing:
         raise StoreValidationError(f"presentation missing fields: {sorted(missing)}")

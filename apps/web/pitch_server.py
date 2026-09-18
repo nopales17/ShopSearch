@@ -33,9 +33,10 @@ from backend.platform.paths import (
     DEFAULT_DEMO_STORE_PATH,
     DEFAULT_MEDIA_ROOT,
 )
+from backend.search.embedding_import import import_pitch_embeddings
 from backend.search.multimodal import MultimodalSearchService, TextEncoder
 from backend.search.price import parse_price
-from backend.search.vector_source import CommittedIndexVectorSource
+from backend.search.vector_source import DatabaseVectorSource, VectorCache
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
 from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
@@ -57,6 +58,12 @@ class StorefrontStack:
     store: Store
     index_path: Path
 
+    def close(self) -> None:
+        """Release backend connections; safe to call more than once."""
+
+        self.catalog_repository.close()
+        self.store_repository.close()
+
 
 def open_demo_stack(
     database_path: Path | None = None, media_root: Path | None = None
@@ -68,6 +75,13 @@ def open_demo_stack(
     image_store = LocalImageStore(media_root or DEFAULT_MEDIA_ROOT)
     store = seed_store(store_repository, DEFAULT_DEMO_STORE_PATH)
     import_pitch_dataset(catalog_repository, image_store, DEFAULT_DEMO_DATASET_PATH, store)
+    import_pitch_embeddings(
+        catalog_repository,
+        DEFAULT_DEMO_INDEX_PATH,
+        store,
+        model_id=MODEL_ID,
+        model_revision=MODEL_REVISION,
+    )
     return StorefrontStack(
         store_repository, catalog_repository, image_store, store, DEFAULT_DEMO_INDEX_PATH
     )
@@ -152,10 +166,14 @@ class PitchApplication(WebApplication):
                 raise ValueError("unknown category")
             start = time.perf_counter()
             search_id = None
+            coverage = None
             if query.strip():
                 response = self.search.search(
                     SearchQuery(text=query, category=category or None, limit=12)
                 )
+                if response.coverage is None:
+                    raise ValueError("search service did not report coverage")
+                coverage = response.coverage
                 search_id = response.search_id
                 filters = parse_price(query).filters()
                 if category:
@@ -175,6 +193,9 @@ class PitchApplication(WebApplication):
                         "filters": filters,
                         "placeholder": False,
                         "result_count": len(items),
+                        "published_count": coverage.published,
+                        "ready_count": coverage.ready,
+                        "excluded_unindexed_count": coverage.excluded_unindexed,
                         "results": [
                             {**self.catalog.public_snapshot(item), "rank": rank}
                             for rank, item in enumerate(items, 1)
@@ -195,7 +216,9 @@ class PitchApplication(WebApplication):
                 )
             elapsed_ms = (time.perf_counter() - start) * 1000
             body = json.dumps(
-                views.result_payload(self.catalog, self.store, items, query, search_id, elapsed_ms)
+                views.result_payload(
+                    self.catalog, self.store, items, query, search_id, elapsed_ms, coverage
+                )
             )
             content_type = "application/json"
         elif parsed.path.startswith("/items/"):
@@ -264,17 +287,13 @@ def build_pitch_application(
     scope: StoreScope,
     catalog_repository: CatalogRepository,
     image_store: ImageStore,
+    vector_cache: VectorCache,
     index_path: Path,
     telemetry_path: Path | None = None,
     encoder: TextEncoder | None = None,
 ) -> PitchApplication:
     catalog = catalog_repository.loaded_catalog(store)
-    vector_source = CommittedIndexVectorSource(
-        index_path,
-        expected_catalog_version=catalog.version,
-        expected_model_id=MODEL_ID,
-        expected_model_revision=MODEL_REVISION,
-    )
+    vector_source = DatabaseVectorSource(vector_cache, scope)
     encoder = encoder or ClipEncoder()
     service = MultimodalSearchService(catalog, vector_source, encoder)
     encoder.text("glass")  # Warm inference at startup, not from the fixed query list.
@@ -286,6 +305,25 @@ def build_pitch_application(
     )
 
 
+class StorefrontHttpServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that releases the storefront backends on shutdown."""
+
+    def __init__(
+        self,
+        address: tuple[str, int],
+        handler: type[BaseHTTPRequestHandler],
+        stack: StorefrontStack,
+    ) -> None:
+        super().__init__(address, handler)
+        self._stack = stack
+
+    def server_close(self) -> None:
+        try:
+            super().server_close()
+        finally:
+            self._stack.close()
+
+
 def create_pitch_server(
     port: int = 8000,
     telemetry_path: Path | None = None,
@@ -294,16 +332,20 @@ def create_pitch_server(
     media_root: Path | None = None,
 ) -> ThreadingHTTPServer:
     stack = open_demo_stack(database_path, media_root)
+    vector_cache = VectorCache(
+        stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
+    )
     application = build_pitch_application(
         stack.store,
         stack.store.scope,
         stack.catalog_repository,
         stack.image_store,
+        vector_cache,
         stack.index_path,
         telemetry_path,
         encoder,
     )
-    return ThreadingHTTPServer(("127.0.0.1", port), application.handler())
+    return StorefrontHttpServer(("127.0.0.1", port), application.handler(), stack)
 
 
 def main() -> None:

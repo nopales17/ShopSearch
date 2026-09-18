@@ -13,8 +13,10 @@ Nothing is hard-deleted; mutations append `item_events`.
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
+import struct
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -56,6 +58,44 @@ class ItemState:
     index_state: IndexState
     index_attempts: int
     index_error: str | None
+
+
+@dataclass(frozen=True)
+class StoreGenerations:
+    """Per-store catalog and index counters (ADR-0005 §5)."""
+
+    catalog: int
+    index: int
+
+
+@dataclass(frozen=True)
+class EmbeddingRecord:
+    item_id: str
+    dim: int
+    model_id: str
+    model_revision: str
+    image_sha256: str
+    vector: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class IndexCandidate:
+    item_id: str
+    state: IndexState
+    attempts: int
+
+
+@dataclass(frozen=True)
+class IndexSummary:
+    published: int
+    ready: int
+    pending: int
+    failed: int
+    stale: int
+
+    @property
+    def excluded_unindexed(self) -> int:
+        return self.published - self.ready
 
 
 class CatalogRepository:
@@ -166,6 +206,7 @@ class CatalogRepository:
                 )
         except sqlite3.IntegrityError as error:
             raise CatalogConflictError(f"item {item_id} violates catalog constraints") from error
+        self.bump_catalog_generation(scope)
         return True
 
     def add_image(
@@ -246,6 +287,7 @@ class CatalogRepository:
             raise CatalogConflictError(
                 f"image for item {item_id} violates store-scoped catalog constraints"
             ) from error
+        self.bump_catalog_generation(scope)
         return True
 
     def append_event(
@@ -470,6 +512,288 @@ class CatalogRepository:
             .fetchall()
         )
 
+    # -- generations ---------------------------------------------------------
+
+    def generations(self, scope: StoreScope) -> StoreGenerations:
+        row = (
+            self._database.connection()
+            .execute(
+                "SELECT catalog_generation, index_generation FROM store_generations "
+                "WHERE store_id = ?",
+                (scope.store_id,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            return StoreGenerations(0, 0)
+        return StoreGenerations(int(row["catalog_generation"]), int(row["index_generation"]))
+
+    def bump_catalog_generation(self, scope: StoreScope) -> StoreGenerations:
+        """Bump the content/listing generation; index-state changes never do this."""
+
+        return self._bump_generation(
+            scope,
+            "UPDATE store_generations SET catalog_generation = catalog_generation + 1, "
+            "updated_at = ? WHERE store_id = ?",
+        )
+
+    def bump_index_generation(self, scope: StoreScope) -> StoreGenerations:
+        """Bump the embedding generation; index-state changes alone never do this."""
+
+        return self._bump_generation(
+            scope,
+            "UPDATE store_generations SET index_generation = index_generation + 1, "
+            "updated_at = ? WHERE store_id = ?",
+        )
+
+    def _bump_generation(self, scope: StoreScope, statement: str) -> StoreGenerations:
+        connection = self._database.connection()
+        now = utc_now()
+        with connection:
+            cursor = connection.execute(statement, (now, scope.store_id))
+            if cursor.rowcount == 0:
+                try:
+                    connection.execute(
+                        "INSERT INTO store_generations "
+                        "(store_id, catalog_generation, index_generation, updated_at) "
+                        "VALUES (?, 0, 0, ?)",
+                        (scope.store_id, now),
+                    )
+                except sqlite3.IntegrityError:
+                    pass  # Another writer created the row; the statement below re-applies.
+                connection.execute(statement, (now, scope.store_id))
+        return self.generations(scope)
+
+    # -- embeddings ----------------------------------------------------------
+
+    def put_ready_embedding(
+        self,
+        scope: StoreScope,
+        *,
+        item_id: str,
+        vector: Sequence[float],
+        model_id: str,
+        model_revision: str,
+        image_sha256: str,
+    ) -> bool:
+        """Store one item embedding and mark the item ready.
+
+        The binding is verified against the item's current stored image, so a row
+        can never claim a relation the catalog does not have. Returns False when an
+        identical row already exists.
+        """
+
+        values = _validate_vector(vector)
+        if not model_id or not model_revision:
+            raise CatalogError("embedding model identity is required")
+        validate_media_address(image_sha256, DISPLAY_VARIANT)
+        connection = self._database.connection()
+        image = connection.execute(
+            "SELECT sha256 FROM images WHERE store_id = ? AND item_id = ? AND variant = ?",
+            (scope.store_id, item_id, DISPLAY_VARIANT),
+        ).fetchone()
+        if image is None:
+            raise CatalogError(f"item {item_id} has no stored display image to bind an embedding")
+        if str(image["sha256"]) != image_sha256:
+            raise CatalogConflictError(
+                f"embedding for {item_id} does not match the item's stored image"
+            )
+        blob = struct.pack(f"<{len(values)}f", *values)
+        existing = connection.execute(
+            "SELECT dim, model_id, model_revision, image_sha256, vector FROM embeddings "
+            "WHERE store_id = ? AND item_id = ?",
+            (scope.store_id, item_id),
+        ).fetchone()
+        if existing is not None and (
+            int(existing["dim"]),
+            str(existing["model_id"]),
+            str(existing["model_revision"]),
+            str(existing["image_sha256"]),
+            bytes(existing["vector"]),
+        ) == (len(values), model_id, model_revision, image_sha256, blob):
+            return False
+        now = utc_now()
+        try:
+            with connection:
+                cursor = connection.execute(
+                    "UPDATE embeddings SET dim = ?, model_id = ?, model_revision = ?, "
+                    "image_sha256 = ?, vector = ?, updated_at = ? "
+                    "WHERE store_id = ? AND item_id = ?",
+                    (
+                        len(values),
+                        model_id,
+                        model_revision,
+                        image_sha256,
+                        blob,
+                        now,
+                        scope.store_id,
+                        item_id,
+                    ),
+                )
+                if cursor.rowcount == 0:
+                    connection.execute(
+                        "INSERT INTO embeddings (store_id, item_id, dim, model_id, "
+                        "model_revision, image_sha256, vector, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            scope.store_id,
+                            item_id,
+                            len(values),
+                            model_id,
+                            model_revision,
+                            image_sha256,
+                            blob,
+                            now,
+                            now,
+                        ),
+                    )
+                connection.execute(
+                    "UPDATE items SET index_state = ?, index_attempts = 0, index_error = NULL "
+                    "WHERE store_id = ? AND item_id = ?",
+                    (IndexState.READY.value, scope.store_id, item_id),
+                )
+        except sqlite3.IntegrityError as error:
+            raise CatalogConflictError(
+                f"embedding for {item_id} violates store-scoped catalog constraints"
+            ) from error
+        self.bump_index_generation(scope)
+        return True
+
+    def mark_index_failed(
+        self, scope: StoreScope, *, item_id: str, attempts: int, error: str
+    ) -> None:
+        """Record one failed indexing attempt; listing state is never touched."""
+
+        with self._database.connection() as connection:
+            connection.execute(
+                "UPDATE items SET index_state = ?, index_attempts = ?, index_error = ? "
+                "WHERE store_id = ? AND item_id = ?",
+                (IndexState.FAILED.value, attempts, error[:500], scope.store_id, item_id),
+            )
+
+    def reset_index_failures(self, scope: StoreScope) -> int:
+        """Return failed items to pending so an operator can retry after a fix."""
+
+        with self._database.connection() as connection:
+            cursor = connection.execute(
+                "UPDATE items SET index_state = ?, index_attempts = 0, index_error = NULL "
+                "WHERE store_id = ? AND index_state = ?",
+                (IndexState.PENDING.value, scope.store_id, IndexState.FAILED.value),
+            )
+        return int(cursor.rowcount)
+
+    def embedding_for(self, scope: StoreScope, item_id: str) -> EmbeddingRecord | None:
+        row = (
+            self._database.connection()
+            .execute(
+                "SELECT * FROM embeddings WHERE store_id = ? AND item_id = ?",
+                (scope.store_id, item_id),
+            )
+            .fetchone()
+        )
+        return None if row is None else _embedding_record(row)
+
+    def ready_vectors(
+        self,
+        scope: StoreScope,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int,
+    ) -> dict[str, tuple[float, ...]]:
+        """Published, ready, validly bound vectors keyed by item ID."""
+
+        vectors: dict[str, tuple[float, ...]] = {}
+        for row in self._published_index_rows(scope):
+            if (
+                _effective_index_state(
+                    row, model_id=model_id, model_revision=model_revision, dimensions=dimensions
+                )
+                is not IndexState.READY
+            ):
+                continue
+            vectors[str(row["item_id"])] = _unpack_vector(bytes(row["vector"]), int(row["dim"]))
+        return vectors
+
+    def index_summary(
+        self, scope: StoreScope, *, model_id: str, model_revision: str, dimensions: int
+    ) -> IndexSummary:
+        counts = {state: 0 for state in IndexState}
+        published = 0
+        for row in self._published_index_rows(scope):
+            published += 1
+            counts[
+                _effective_index_state(
+                    row, model_id=model_id, model_revision=model_revision, dimensions=dimensions
+                )
+            ] += 1
+        return IndexSummary(
+            published=published,
+            ready=counts[IndexState.READY],
+            pending=counts[IndexState.PENDING],
+            failed=counts[IndexState.FAILED],
+            stale=counts[IndexState.STALE],
+        )
+
+    def index_candidates(
+        self,
+        scope: StoreScope,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int,
+        max_attempts: int,
+        limit: int,
+    ) -> tuple[IndexCandidate, ...]:
+        """Published items that need indexing, excluding failures already at the cap."""
+
+        if max_attempts < 1 or limit < 1:
+            raise CatalogError("index candidate limits must be positive")
+        candidates: list[IndexCandidate] = []
+        for row in self._published_index_rows(scope):
+            state = _effective_index_state(
+                row, model_id=model_id, model_revision=model_revision, dimensions=dimensions
+            )
+            attempts = int(row["index_attempts"])
+            if state is IndexState.READY:
+                continue
+            if state is IndexState.FAILED and attempts >= max_attempts:
+                continue
+            candidates.append(IndexCandidate(str(row["item_id"]), state, attempts))
+            if len(candidates) >= limit:
+                break
+        return tuple(candidates)
+
+    def _published_index_rows(self, scope: StoreScope) -> list[sqlite3.Row]:
+        return (
+            self._database.connection()
+            .execute(
+                """
+                SELECT items.item_id AS item_id,
+                       items.index_state AS index_state,
+                       items.index_attempts AS index_attempts,
+                       images.sha256 AS image_sha256,
+                       embeddings.dim AS dim,
+                       embeddings.model_id AS model_id,
+                       embeddings.model_revision AS model_revision,
+                       embeddings.image_sha256 AS embedding_image_sha256,
+                       embeddings.vector AS vector
+                FROM items
+                LEFT JOIN images
+                  ON images.store_id = items.store_id
+                 AND images.item_id = items.item_id
+                 AND images.variant = ?
+                LEFT JOIN embeddings
+                  ON embeddings.store_id = items.store_id
+                 AND embeddings.item_id = items.item_id
+                WHERE items.store_id = ? AND items.listing_state = ?
+                ORDER BY items.sort_order, items.item_id
+                """,
+                (DISPLAY_VARIANT, scope.store_id, ListingState.PUBLISHED.value),
+            )
+            .fetchall()
+        )
+
 
 def _image_record(row: sqlite3.Row) -> CatalogImageRecord:
     return CatalogImageRecord(
@@ -552,3 +876,51 @@ def _decimal_or_error(value: Any) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, ValueError) as error:
         raise CatalogError("stored price is not decimal-compatible") from error
+
+
+def _validate_vector(vector: Sequence[float]) -> tuple[float, ...]:
+    values = tuple(float(value) for value in vector)
+    if not values:
+        raise CatalogError("embedding vector must not be empty")
+    if any(not math.isfinite(value) for value in values):
+        raise CatalogError("embedding vector must contain finite values")
+    return values
+
+
+def _unpack_vector(blob: bytes, dim: int) -> tuple[float, ...]:
+    if dim < 1 or len(blob) != dim * 4:
+        raise CatalogError("stored embedding blob does not match its dimension")
+    return struct.unpack(f"<{dim}f", blob)
+
+
+def _embedding_record(row: sqlite3.Row) -> EmbeddingRecord:
+    return EmbeddingRecord(
+        item_id=str(row["item_id"]),
+        dim=int(row["dim"]),
+        model_id=str(row["model_id"]),
+        model_revision=str(row["model_revision"]),
+        image_sha256=str(row["image_sha256"]),
+        vector=_unpack_vector(bytes(row["vector"]), int(row["dim"])),
+    )
+
+
+def _effective_index_state(
+    row: sqlite3.Row, *, model_id: str, model_revision: str, dimensions: int
+) -> IndexState:
+    """Read-time index state: a mismatched binding is stale, never ready."""
+
+    stored = IndexState(row["index_state"])
+    has_row = row["vector"] is not None
+    bound = (
+        has_row
+        and int(row["dim"]) == dimensions
+        and str(row["model_id"]) == model_id
+        and str(row["model_revision"]) == model_revision
+        and row["image_sha256"] is not None
+        and str(row["embedding_image_sha256"]) == str(row["image_sha256"])
+    )
+    if bound:
+        return IndexState.READY if stored is IndexState.READY else IndexState.STALE
+    if has_row or stored in (IndexState.READY, IndexState.STALE):
+        return IndexState.STALE
+    return stored

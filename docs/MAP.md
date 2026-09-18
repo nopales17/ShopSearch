@@ -35,7 +35,7 @@ shopsearch/
 │   ├── catalog/              catalog validation/read model, store-scoped repository, demo import
 │   ├── media/                ImageStore + content-addressed local store + EXIF-free derivatives
 │   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
-│   ├── search/               placeholder + CLIP ranking; vector source; deterministic price parser
+│   ├── search/               ranking + price parser; embedding source/cache; indexer + CLI
 │   ├── ingestion/            ingestion adapters
 │   ├── telemetry/            local append-only JSONL persistence + read-only report
 │   ├── decision/             future SER-style decision logic
@@ -97,6 +97,24 @@ by item ID while `multimodal.py` keeps cosine ranking and price semantics unchan
 `data/local/media/` holds ignored content-addressed derivative blobs.
 `tools/import_pitch_catalog.py` is the operator entry point for the demo import.
 
+S4 moves embeddings into the store-scoped catalog. The `embeddings` table holds one
+opaque little-endian float32 vector per item with explicit `dim`, `model_id`,
+`model_revision` and `image_sha256`; `store_generations` holds the per-store catalog
+and index counters. `backend/catalog/store_repository.py` also owns those rows, the
+generation counters, the index-state transitions and the read-time validity rule (a
+row counts as `ready` only while its binding matches the item's current stored image
+and the expected model). `backend/search/embedding_import.py` writes the committed
+demo vectors into those rows unchanged, bound to the item's stored image.
+`backend/search/vector_source.py` now provides the runtime `DatabaseVectorSource`,
+cached per store and keyed by both generations, while `CommittedIndexVectorSource`
+survives only as the import/parity path. `backend/search/multimodal.py` routes visual
+text over ready vectors and serves browse, category and price paths over every
+published item, reporting published/ready/excluded coverage. `backend/search/indexer.py`
+is the single-purpose indexer (bounded retries with exponential backoff, attempt cap,
+recorded last error, listing state untouched) with `python -m backend.search.indexer`
+as its CLI. The catalog page's coverage disclosure is rendered by `pitch.js` from the
+`/api/search` response so the S1/S2 server-rendered bytes stay unchanged.
+
 `docs/SLICES.md` owns the ordered implementation slices for the store-scoped platform
 transition and their acceptance criteria; `docs/adr/0004-production-runtime.md` and
 `docs/adr/0005-store-scoped-platform.md` own the runtime and boundary decisions it
@@ -105,8 +123,11 @@ Flask/Waitress adapter, and its store record plus hostname resolution come from 
 SQLite store registry. S3 is implemented: items, images and item events live in the
 store-scoped SQLite catalog, media is content-addressed behind `ImageStore`, and the
 storefront, browse, detail and media routes read through `CatalogRepository` and the
-media layer. S4-S10 are not implemented: embeddings live only in the committed CLIP
-index file read through the compatibility vector source, and telemetry remains JSONL.
+media layer. S4 is implemented: per-item embeddings live in the store-scoped catalog,
+runtime retrieval reads them through a generation-keyed per-store cache, publication
+stays independent of index state, and coverage is disclosed and recorded. S5-S10 are
+not implemented: telemetry remains JSONL, and the committed CLIP index file is an
+import/parity source only.
 
 `backend/telemetry/report.py` reads a persisted local event JSONL and prints
 deterministic demo funnel counts with explicit denominators. It does not infer

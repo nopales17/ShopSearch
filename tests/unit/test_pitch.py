@@ -115,9 +115,10 @@ class PitchBoundaryTest(unittest.TestCase):
                         expected_model_revision=MODEL_REVISION,
                     )
 
-    def test_index_missing_a_catalog_item_is_rejected_by_the_service(self) -> None:
+    def test_index_missing_a_catalog_item_is_excluded_and_reported(self) -> None:
         catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
         original = json.loads((ROOT / "data/pitch/image_index.json").read_text())
+        missing_item = original["item_ids"][-1]
         with tempfile.TemporaryDirectory() as directory:
             index = dict(original)
             index["item_ids"] = original["item_ids"][:-1]
@@ -130,5 +131,13 @@ class PitchBoundaryTest(unittest.TestCase):
                 expected_model_id=MODEL_ID,
                 expected_model_revision=MODEL_REVISION,
             )
-            with self.assertRaises(ValueError):
-                MultimodalSearchService(catalog, source, StubEncoder())
+            response = MultimodalSearchService(catalog, source, StubEncoder()).search(
+                SearchQuery(text="blue", limit=100)
+            )
+        self.assertNotIn(missing_item, [result.item_id for result in response.results])
+        coverage = response.coverage
+        assert coverage is not None
+        self.assertEqual(coverage.published, 90)
+        self.assertEqual(coverage.ready, 89)
+        self.assertEqual(coverage.excluded_unindexed, 1)
+        self.assertTrue(coverage.visual_text)

@@ -89,6 +89,8 @@
     "credits_copy_html": "All photographs are credited to the Cleveland Museum of Art and designated CC0 in its collection API. They are used unchanged as a manually curated demo assortment; no endorsement or sale is implied.",
     "credits_policy_url": "https://www.clevelandart.org/open-access",
     "credits_policy_label": "CMA Open Access policy \u2197",
-    "public_claim": "Curated photo demo; illustrative price; not store inventory"
+    "public_claim": "Curated photo demo; illustrative price; not store inventory",
+    "coverage_disclosure_template": "Some objects ({excluded} of {published}) are not yet searchable by description.",
+    "coverage_browse_label": "Browse all objects"
   }
 }

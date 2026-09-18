@@ -16,14 +16,16 @@ from http import HTTPStatus
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import waitress
 from flask import Flask, Response, request
 
 from apps.web.pitch_server import PitchApplication, build_pitch_application, open_demo_stack
+from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
 from backend.search.multimodal import TextEncoder
+from backend.search.vector_source import VectorCache
 from backend.stores.resolver import HostResolver, load_development_hosts
 from contracts.store import StoreScope
 
@@ -143,7 +145,7 @@ def create_pitch_app(
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
     media_root: Path | None = None,
-    storefronts: Mapping[str, Path] | None = None,
+    storefronts: Iterable[str] | None = None,
 ) -> Flask:
     """Return the Flask application serving host-resolved storefronts.
 
@@ -152,9 +154,10 @@ def create_pitch_app(
     `config/development_hosts.json` is the explicit local host-to-store map; it
     contains no wildcard, and an unknown host never falls back to a store.
 
-    `storefronts` maps each provisioned store to its vector index; by default only
-    the bootstrapped demo store is served. A resolved store that is not provisioned
-    gets a 404 rather than another store's catalog.
+    `storefronts` names the provisioned stores this composition serves; by default
+    only the bootstrapped demo store is served. A resolved store that is not
+    provisioned gets a 404 rather than another store's catalog. Retrieval reads each
+    store's embedding rows, not the import artifact `stack.index_path` names.
     """
 
     stack = open_demo_stack(database_path, media_root)
@@ -162,15 +165,15 @@ def create_pitch_app(
         DEFAULT_DEVELOPMENT_HOSTS_PATH if development_hosts_path is None else development_hosts_path
     )
     resolver = HostResolver(stack.store_repository, development_hosts)
-    index_paths = (
-        {stack.store.store_id: stack.index_path} if storefronts is None else dict(storefronts)
+    provisioned = {stack.store.store_id} if storefronts is None else set(storefronts)
+    vector_cache = VectorCache(
+        stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
     )
     applications: dict[str, PitchApplication] = {}
     application_lock = threading.Lock()
 
     def application_for(scope: StoreScope) -> PitchApplication | None:
-        index_path = index_paths.get(scope.store_id)
-        if index_path is None:
+        if scope.store_id not in provisioned:
             return None
         with application_lock:
             existing = applications.get(scope.store_id)
@@ -184,7 +187,8 @@ def create_pitch_app(
                 scope,
                 stack.catalog_repository,
                 stack.image_store,
-                index_path,
+                vector_cache,
+                stack.index_path,
                 telemetry_path,
                 encoder,
             )
@@ -205,6 +209,7 @@ def create_pitch_app(
             return _plain(HTTPStatus.NOT_FOUND, "Not found")
         return _dispatch(application, request.environ)
 
+    app.extensions["shopsearch_stack"] = stack
     return app
 
 
@@ -217,6 +222,7 @@ class WaitressServer:
         self._server: Any = waitress.create_server(
             application, host=host, port=port, threads=threads
         )
+        self._stack = application.extensions.get("shopsearch_stack")
         self._stopping = threading.Event()
 
     @property
@@ -244,6 +250,8 @@ class WaitressServer:
         if not self._stopping.is_set():
             self._stopping.set()
             self._server.close()
+        if self._stack is not None:
+            self._stack.close()
 
 
 def create_pitch_server(
@@ -254,7 +262,7 @@ def create_pitch_server(
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
     media_root: Path | None = None,
-    storefronts: Mapping[str, Path] | None = None,
+    storefronts: Iterable[str] | None = None,
 ) -> WaitressServer:
     """Return a bound Waitress server for the pitch application."""
 

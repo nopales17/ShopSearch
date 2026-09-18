@@ -69,6 +69,16 @@ def validate_store(store: Store) -> None:
             or any(not isinstance(value, str) or not value.strip() for value in values)
         ):
             raise StoreValidationError(f"presentation.{name} must be a non-empty string list")
+    template = presentation.coverage_disclosure_template
+    for token in ("{excluded}", "{published}"):
+        if token not in template:
+            raise StoreValidationError(
+                "coverage_disclosure_template must state the excluded and published counts"
+            )
+    try:
+        template.format(excluded=1, published=2)
+    except (KeyError, IndexError, ValueError) as error:
+        raise StoreValidationError("coverage_disclosure_template is not formattable") from error
     roles = [image.role for image in presentation.hero_images]
     if sorted(roles) != ["inset", "main"]:
         raise StoreValidationError("presentation.hero_images needs exactly one main and one inset")

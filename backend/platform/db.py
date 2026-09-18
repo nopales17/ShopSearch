@@ -34,7 +34,10 @@ def connect(database_path: Path | str) -> sqlite3.Connection:
     location = str(database_path)
     if location != ":memory:":
         Path(location).parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(location, timeout=30)
+    # Connections are used from exactly one owning thread (see `Database`), but the
+    # server shutdown path closes every thread's connection from the main thread, so
+    # SQLite's per-thread object check is disabled here.
+    connection = sqlite3.connect(location, timeout=30, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA foreign_keys=ON")

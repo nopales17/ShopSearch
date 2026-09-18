@@ -1,17 +1,22 @@
 """Vector sources for ranking.
 
 ADR-0004 replaces the positional whole-catalog index with a per-item embedding
-binding. S3 ships the compatibility source: the committed CLIP index file, looked
-up by item ID instead of position, so ranking behavior is unchanged this slice.
-S4 adds the database-backed per-item source and index state.
+binding. S4 makes the runtime source the store-scoped `embeddings` table, cached
+per store and keyed by the catalog and index generations. The committed index file
+remains only as the demo import/compatibility source.
 """
 
 from __future__ import annotations
 
 import json
 import math
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from threading import Lock
+from typing import Mapping, Protocol
+
+from backend.catalog.store_repository import StoreGenerations
+from contracts.store import StoreScope
 
 EMBEDDING_DIMENSIONS = 512
 
@@ -20,16 +25,48 @@ class VectorSourceError(ValueError):
     """Raised when a vector source is stale, malformed or missing an item."""
 
 
+@dataclass(frozen=True)
+class VectorSnapshot:
+    """Usable vectors for one store at one pair of store generations."""
+
+    vectors: Mapping[str, tuple[float, ...]]
+    catalog_generation: int
+    index_generation: int
+
+    def vector_for(self, item_id: str) -> tuple[float, ...] | None:
+        return self.vectors.get(item_id)
+
+    def matches(self, catalog: int, index: int) -> bool:
+        return self.catalog_generation == catalog and self.index_generation == index
+
+
 class VectorSource(Protocol):
-    """Store-scoped provider of item embeddings."""
+    """Provider of the currently usable item embeddings for one store."""
 
-    def item_ids(self) -> frozenset[str]: ...
+    def current(self) -> VectorSnapshot: ...
 
-    def vector_for(self, item_id: str) -> tuple[float, ...]: ...
+
+class EmbeddingReader(Protocol):
+    """Persistence the vector cache reads through."""
+
+    def generations(self, scope: StoreScope) -> StoreGenerations: ...
+
+    def ready_vectors(
+        self,
+        scope: StoreScope,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int,
+    ) -> dict[str, tuple[float, ...]]: ...
 
 
 class CommittedIndexVectorSource:
-    """Compatibility vector source over the committed whole-store index file."""
+    """Import/compatibility source over the committed whole-store index file.
+
+    S4 keeps this only for the demo vector import and for parity checks against the
+    pre-S4 path; production retrieval reads `DatabaseVectorSource`.
+    """
 
     def __init__(
         self,
@@ -67,16 +104,67 @@ class CommittedIndexVectorSource:
                 or any(not math.isfinite(value) for value in vector)
             ):
                 raise VectorSourceError("image index has invalid embedding dimensions")
-        self._vectors = {
-            str(item_id): tuple(float(value) for value in vector)
-            for item_id, vector in zip(item_ids, vectors, strict=True)
-        }
+        self._snapshot = VectorSnapshot(
+            {
+                str(item_id): tuple(float(value) for value in vector)
+                for item_id, vector in zip(item_ids, vectors, strict=True)
+            },
+            0,
+            0,
+        )
 
-    def item_ids(self) -> frozenset[str]:
-        return frozenset(self._vectors)
+    def current(self) -> VectorSnapshot:
+        return self._snapshot
 
-    def vector_for(self, item_id: str) -> tuple[float, ...]:
-        try:
-            return self._vectors[item_id]
-        except KeyError:
-            raise VectorSourceError(f"no embedding indexed for item {item_id}") from None
+
+class VectorCache:
+    """Process-wide per-store cache keyed by the catalog and index generations.
+
+    Every read re-checks the store generations, so an embedding write in another
+    process (the reindex CLI) invalidates the cached snapshot on the next search.
+    """
+
+    def __init__(
+        self,
+        repository: EmbeddingReader,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int = EMBEDDING_DIMENSIONS,
+    ) -> None:
+        self._repository = repository
+        self._model_id = model_id
+        self._model_revision = model_revision
+        self._dimensions = dimensions
+        self._snapshots: dict[str, VectorSnapshot] = {}
+        self._lock = Lock()
+
+    def snapshot(self, scope: StoreScope) -> VectorSnapshot:
+        generations = self._repository.generations(scope)
+        cached = self._snapshots.get(scope.store_id)
+        if cached is not None and cached.matches(generations.catalog, generations.index):
+            return cached
+        vectors = self._repository.ready_vectors(
+            scope,
+            model_id=self._model_id,
+            model_revision=self._model_revision,
+            dimensions=self._dimensions,
+        )
+        snapshot = VectorSnapshot(dict(vectors), generations.catalog, generations.index)
+        with self._lock:
+            existing = self._snapshots.get(scope.store_id)
+            if existing is not None and existing.matches(generations.catalog, generations.index):
+                return existing
+            self._snapshots[scope.store_id] = snapshot
+        return snapshot
+
+
+class DatabaseVectorSource:
+    """Store-scoped runtime source over the cached embeddings table."""
+
+    def __init__(self, cache: VectorCache, scope: StoreScope) -> None:
+        self._cache = cache
+        self._scope = scope
+
+    def current(self) -> VectorSnapshot:
+        return self._cache.snapshot(self._scope)

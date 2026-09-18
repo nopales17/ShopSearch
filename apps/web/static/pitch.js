@@ -21,6 +21,7 @@ async function search() {
     const data = await response.json();
     if (current !== sequence) return;
     results.innerHTML = data.html || '<div class="empty-results"><h2>Nothing at that price.</h2><p>Try a wider budget or a different description.<br>This is a limited demo collection, not a stock check.</p></div>';
+    coverageNotice(data.coverage_html);
     summary.textContent = `${data.count} ${query ? 'results' : 'objects in the demo collection'}`;
     document.querySelector('#applied-filter').textContent = data.filter_label;
     document.querySelector('#clear-search').hidden = !query && !category;
@@ -32,6 +33,19 @@ async function search() {
       summary.textContent = 'Search could not finish; previous results remain below.';
     }
   } finally { if (current === sequence) results.setAttribute('aria-busy', 'false'); }
+}
+function coverageNotice(html) {
+  const results = document.querySelector('#results');
+  if (!results) return;
+  let node = document.querySelector('#coverage-notice');
+  if (!node) {
+    node = document.createElement('p');
+    node.id = 'coverage-notice';
+    node.className = 'coverage-notice';
+    results.parentNode.insertBefore(node, results);
+  }
+  node.innerHTML = html || '';
+  node.hidden = !html;
 }
 if (form) {
   const query = document.querySelector('#query');

@@ -9,15 +9,28 @@ from decimal import Decimal
 from pathlib import Path
 
 from apps.web.server import ROOT
+from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.catalog.pitch import load_pitch_catalog
 from backend.catalog.pitch_import import ImportResult, import_pitch_dataset
 from backend.catalog.store_repository import CatalogRepository
 from backend.media.image_store import LocalImageStore
-from backend.platform.paths import DEFAULT_DEMO_DATASET_PATH, DEFAULT_DEMO_STORE_PATH
+from backend.platform.paths import (
+    DEFAULT_DEMO_DATASET_PATH,
+    DEFAULT_DEMO_INDEX_PATH,
+    DEFAULT_DEMO_STORE_PATH,
+)
+from backend.search.embedding_import import EmbeddingImportResult, import_pitch_embeddings
 from backend.search.multimodal import MultimodalSearchService
+from backend.search.vector_source import DatabaseVectorSource, VectorCache
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
-from contracts.catalog import CaptureTimeSource, EvidenceRef, ListingState, ObservationSource
+from contracts.catalog import (
+    CaptureTimeSource,
+    EvidenceRef,
+    IndexState,
+    ListingState,
+    ObservationSource,
+)
 from contracts.search import SearchQuery
 from tests.unit.test_pitch import StubEncoder, pitch_vector_source
 
@@ -49,6 +62,19 @@ class PitchImportTest(unittest.TestCase):
         return import_pitch_dataset(
             self.repository, self.image_store, DEFAULT_DEMO_DATASET_PATH, self.store
         )
+
+    def import_embeddings(self) -> EmbeddingImportResult:
+        return import_pitch_embeddings(
+            self.repository,
+            DEFAULT_DEMO_INDEX_PATH,
+            self.store,
+            model_id=MODEL_ID,
+            model_revision=MODEL_REVISION,
+        )
+
+    def database_vector_source(self) -> DatabaseVectorSource:
+        cache = VectorCache(self.repository, model_id=MODEL_ID, model_revision=MODEL_REVISION)
+        return DatabaseVectorSource(cache, self.scope)
 
     def test_import_is_idempotent(self) -> None:
         first = self.import_dataset()
@@ -97,7 +123,7 @@ class PitchImportTest(unittest.TestCase):
             source = (images_root / f"{item.item_id}.jpg").read_bytes()
             self.assertEqual(hashlib.sha256(source).hexdigest(), image.source_sha256)
             self.assertEqual(image.source_sha256, item.attributes["image_sha256"])
-            self.assertNotEqual(image.sha256, image.source_sha256)
+            self.assertNotEqual(image.sha256, item.attributes["image_sha256"])
 
     def test_capture_time_is_unknown_and_import_time_is_never_capture_time(self) -> None:
         self.import_dataset()
@@ -144,35 +170,63 @@ class PitchImportTest(unittest.TestCase):
             self.assertTrue(item.evidence)
             self.assertEqual(catalog.public_snapshot(item)["currency"], "USD")
 
-    def test_repository_catalog_matches_json_catalog_search_inputs(self) -> None:
+    def test_embedding_import_stores_exact_vectors_bound_to_images(self) -> None:
         self.import_dataset()
-        repository_catalog = self.repository.loaded_catalog(self.store)
-        json_catalog = load_pitch_catalog(DEFAULT_DEMO_DATASET_PATH, self.store.configuration())
-        repository_source = pitch_vector_source(repository_catalog)
-        json_source = pitch_vector_source(json_catalog)
-        self.assertEqual(
-            [item.item_id for item in repository_catalog.items],
-            [item.item_id for item in json_catalog.items],
-        )
-        for repository_item, json_item in zip(
-            repository_catalog.items, json_catalog.items, strict=True
-        ):
-            self.assertEqual(repository_item.item_id, json_item.item_id)
-            self.assertEqual(repository_item.price, json_item.price)
-            self.assertEqual(repository_item.category, json_item.category)
-            self.assertEqual(
-                repository_source.vector_for(repository_item.item_id),
-                json_source.vector_for(json_item.item_id),
-            )
+        result = self.import_embeddings()
+        self.assertEqual((result.embeddings_created, result.embeddings_unchanged), (90, 0))
+        self.assertEqual(result.published_without_vectors, 0)
+        committed = pitch_vector_source(self.repository.loaded_catalog(self.store)).current()
+        for item in self.repository.published(self.scope):
+            record = self.repository.embedding_for(self.scope, item.item_id)
+            assert record is not None
+            image = self.repository.display_image(self.scope, item.item_id)
+            assert image is not None
+            self.assertEqual(record.dim, 512)
+            self.assertEqual(record.model_id, MODEL_ID)
+            self.assertEqual(record.model_revision, MODEL_REVISION)
+            self.assertEqual(record.image_sha256, image.sha256)
+            # Numeric values are written unchanged, so ranking is bit-identical.
+            self.assertEqual(record.vector, committed.vector_for(item.item_id))
+            state = self.repository.item_state(self.scope, item.item_id)
+            assert state is not None
+            self.assertIs(state.index_state, IndexState.READY)
+            self.assertEqual(state.index_attempts, 0)
+            self.assertIsNone(state.index_error)
 
-    def test_frozen_queries_rank_identically_to_the_json_catalog_path(self) -> None:
+    def test_embedding_import_is_idempotent(self) -> None:
         self.import_dataset()
+        first = self.import_embeddings()
+        generation = self.repository.generations(self.scope)
+        second = self.import_embeddings()
+        self.assertEqual((first.embeddings_created, first.embeddings_unchanged), (90, 0))
+        self.assertEqual((second.embeddings_created, second.embeddings_unchanged), (0, 90))
+        self.assertEqual(self.repository.generations(self.scope), generation)
+        summary = self.repository.index_summary(
+            self.scope, model_id=MODEL_ID, model_revision=MODEL_REVISION, dimensions=512
+        )
+        self.assertEqual(
+            (summary.published, summary.ready, summary.excluded_unindexed), (90, 90, 0)
+        )
+
+    def test_repository_vectors_match_the_committed_index_exactly(self) -> None:
+        self.import_dataset()
+        self.import_embeddings()
+        json_catalog = load_pitch_catalog(DEFAULT_DEMO_DATASET_PATH, self.store.configuration())
+        committed = pitch_vector_source(json_catalog).current()
+        database = self.database_vector_source().current()
+        for item in json_catalog.items:
+            self.assertEqual(database.vector_for(item.item_id), committed.vector_for(item.item_id))
+        self.assertEqual(len(database.vectors), 90)
+
+    def test_frozen_queries_rank_identically_to_the_committed_index_path(self) -> None:
+        self.import_dataset()
+        self.import_embeddings()
         repository_catalog = self.repository.loaded_catalog(self.store)
         json_catalog = load_pitch_catalog(DEFAULT_DEMO_DATASET_PATH, self.store.configuration())
-        repository_service = MultimodalSearchService(
-            repository_catalog, pitch_vector_source(repository_catalog), StubEncoder()
+        database_service = MultimodalSearchService(
+            repository_catalog, self.database_vector_source(), StubEncoder()
         )
-        json_service = MultimodalSearchService(
+        committed_service = MultimodalSearchService(
             json_catalog, pitch_vector_source(json_catalog), StubEncoder()
         )
         queries = [
@@ -180,9 +234,15 @@ class PitchImportTest(unittest.TestCase):
         ] + CONTROL_QUERIES
         for query in queries:
             with self.subTest(query=query):
-                repository_results = repository_service.search(SearchQuery(text=query, limit=5))
-                json_results = json_service.search(SearchQuery(text=query, limit=5))
-                self.assertEqual(
-                    [(r.item_id, r.rank) for r in repository_results.results],
-                    [(r.item_id, r.rank) for r in json_results.results],
-                )
+                for limit in (5, 100):
+                    database_results = database_service.search(SearchQuery(text=query, limit=limit))
+                    committed_results = committed_service.search(
+                        SearchQuery(text=query, limit=limit)
+                    )
+                    self.assertEqual(
+                        [(r.item_id, r.rank, r.semantic_score) for r in database_results.results],
+                        [(r.item_id, r.rank, r.semantic_score) for r in committed_results.results],
+                    )
+                    assert database_results.coverage is not None
+                    assert committed_results.coverage is not None
+                    self.assertEqual(database_results.coverage, committed_results.coverage)

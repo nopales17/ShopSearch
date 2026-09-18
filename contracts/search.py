@@ -24,11 +24,22 @@ class SearchResult:
 
 
 @dataclass(frozen=True)
+class SearchCoverage:
+    """Retrieval coverage for one search; never an availability or demand claim."""
+
+    published: int
+    ready: int
+    excluded_unindexed: int
+    visual_text: bool
+
+
+@dataclass(frozen=True)
 class SearchResponse:
     search_id: str
     catalog_version: str
     results: tuple[SearchResult, ...]
     is_placeholder: bool = True
+    coverage: SearchCoverage | None = None
 
 
 class SearchService(Protocol):
