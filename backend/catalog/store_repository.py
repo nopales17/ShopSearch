@@ -59,6 +59,14 @@ class DuplicateImageError(CatalogError):
         self.item_id = item_id
 
 
+class CatalogNotFoundError(CatalogError):
+    """Raised when the resolved store has no such item; never says whether others do."""
+
+
+class CatalogStateError(CatalogError):
+    """Raised when a listing-state transition is not one of the allowed ones."""
+
+
 @dataclass(frozen=True)
 class ItemState:
     item_id: str
@@ -131,6 +139,29 @@ class ImageAttachment:
     capture_time: datetime | None
     capture_time_source: CaptureTimeSource
     variant: str = DISPLAY_VARIANT
+
+
+@dataclass(frozen=True)
+class MutationResult:
+    """Outcome of one merchant catalog mutation."""
+
+    item_id: str
+    changed: bool
+    event_id: str | None = None
+
+
+# The only listing transitions S8 exposes (ADR-0005 §6). Each maps to its event name.
+LISTING_TRANSITIONS: dict[tuple[ListingState, ListingState], str] = {
+    (ListingState.PUBLISHED, ListingState.HIDDEN): "hidden",
+    (ListingState.HIDDEN, ListingState.PUBLISHED): "unhidden",
+    (ListingState.PUBLISHED, ListingState.SOLD): "sold",
+    (ListingState.SOLD, ListingState.PUBLISHED): "relisted",
+}
+
+_CATALOG_BUMP = (
+    "UPDATE store_generations SET catalog_generation = catalog_generation + 1, "
+    "updated_at = ? WHERE store_id = ?"
+)
 
 
 class CatalogRepository:
@@ -466,6 +497,40 @@ class CatalogRepository:
         )
         return None if row is None else _image_record(row)
 
+    def current_image(
+        self, scope: StoreScope, item_id: str, variant: str = DISPLAY_VARIANT
+    ) -> CatalogImageRecord | None:
+        """Return the item's stored image whatever its listing state.
+
+        Internal catalog/merchant lookups use this: `display_image()` stays the
+        customer-facing lookup that only ever returns published items, so hiding or
+        selling an item never hides its referenced bytes from cleanup and mutation.
+        """
+
+        row = (
+            self._database.connection()
+            .execute(
+                "SELECT * FROM images WHERE store_id = ? AND item_id = ? AND variant = ?",
+                (scope.store_id, item_id, variant),
+            )
+            .fetchone()
+        )
+        return None if row is None else _image_record(row)
+
+    def image_address_in_use(self, scope: StoreScope, sha256: str, variant: str) -> bool:
+        """True when any image row in this store references the address, in any state."""
+
+        validate_media_address(sha256, variant)
+        row = (
+            self._database.connection()
+            .execute(
+                "SELECT 1 FROM images WHERE store_id = ? AND sha256 = ? AND variant = ? LIMIT 1",
+                (scope.store_id, sha256, variant),
+            )
+            .fetchone()
+        )
+        return row is not None
+
     def image_by_address(
         self, scope: StoreScope, sha256: str, variant: str
     ) -> CatalogImageRecord | None:
@@ -541,6 +606,32 @@ class CatalogRepository:
                 )
             )
         return tuple(managed)
+
+    def managed_item(
+        self,
+        scope: StoreScope,
+        item_id: str,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int,
+    ) -> ManagedItem | None:
+        """One item for the merchant shell, or None when this store has no such item."""
+
+        rows = self._index_rows(scope, None, item_id=item_id)
+        if not rows:
+            return None
+        row = rows[0]
+        return ManagedItem(
+            item_id=str(row["item_id"]),
+            title=str(row["title"]),
+            category=str(row["category"]),
+            price=_decimal_or_error(row["price"]),
+            listing_state=ListingState(row["listing_state"]),
+            index_state=_effective_index_state(
+                row, model_id=model_id, model_revision=model_revision, dimensions=dimensions
+            ),
+        )
 
     # -- internals ----------------------------------------------------------
 
@@ -800,6 +891,267 @@ class CatalogRepository:
             raise CatalogConflictError(f"could not publish item {item_id}") from error
         return event_id
 
+    # -- merchant mutations (S8) ---------------------------------------------
+
+    def update_item_metadata(
+        self,
+        scope: StoreScope,
+        *,
+        item_id: str,
+        title: str,
+        category: str,
+        price: Decimal | None,
+        price_kind: str,
+        actor: str,
+    ) -> MutationResult:
+        """Amend an item's title, category and price in one transaction.
+
+        Listing state, `index_state` and the item's identity are untouched. An
+        unchanged submission is a true no-op: no event and no generation bump.
+        """
+
+        if not actor:
+            raise CatalogError("item events require an actor")
+        _validate_metadata(title, category, price, price_kind)
+        subtuple_after = (title, category, price, price_kind)
+        connection = self._database.connection()
+        now = utc_now()
+        with connection:
+            row = connection.execute(
+                "SELECT title, category, price, price_kind FROM items "
+                "WHERE store_id = ? AND item_id = ?",
+                (scope.store_id, item_id),
+            ).fetchone()
+            if row is None:
+                raise CatalogNotFoundError(item_id)
+            subtuple_before = (
+                str(row["title"]),
+                str(row["category"]),
+                _decimal_or_error(row["price"]),
+                str(row["price_kind"]),
+            )
+            if subtuple_before == subtuple_after:
+                return MutationResult(item_id, changed=False)
+            before = _metadata_payload(*subtuple_before)
+            after = _metadata_payload(*subtuple_after)
+            event_id = str(uuid4())
+            connection.execute(
+                "UPDATE items SET title = ?, category = ?, price = ?, price_kind = ?, "
+                "updated_at = ? WHERE store_id = ? AND item_id = ?",
+                (
+                    after["title"],
+                    after["category"],
+                    _price_text(price),
+                    after["price_kind"],
+                    now,
+                    scope.store_id,
+                    item_id,
+                ),
+            )
+            connection.execute(
+                "INSERT INTO item_events ("
+                "store_id, event_id, item_id, event_type, actor, occurred_at, "
+                "before_json, after_json"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    scope.store_id,
+                    event_id,
+                    item_id,
+                    "metadata_edited",
+                    actor,
+                    now,
+                    json.dumps(before, sort_keys=True),
+                    json.dumps(after, sort_keys=True),
+                ),
+            )
+            self._bump_generation_on(connection, scope, _CATALOG_BUMP, now)
+        return MutationResult(item_id, changed=True, event_id=event_id)
+
+    def transition_listing_state(
+        self,
+        scope: StoreScope,
+        *,
+        item_id: str,
+        target: ListingState,
+        actor: str,
+    ) -> MutationResult:
+        """Apply one allowed listing transition, appending exactly one event.
+
+        An already-satisfied target is a no-op; any other transition is rejected.
+        """
+
+        if not actor:
+            raise CatalogError("item events require an actor")
+        if not isinstance(target, ListingState):
+            raise CatalogStateError("listing target must be a ListingState")
+        connection = self._database.connection()
+        now = utc_now()
+        with connection:
+            row = connection.execute(
+                "SELECT listing_state FROM items WHERE store_id = ? AND item_id = ?",
+                (scope.store_id, item_id),
+            ).fetchone()
+            if row is None:
+                raise CatalogNotFoundError(item_id)
+            current = ListingState(str(row["listing_state"]))
+            if current is target:
+                return MutationResult(item_id, changed=False)
+            event_type = LISTING_TRANSITIONS.get((current, target))
+            if event_type is None:
+                raise CatalogStateError(f"cannot move item from {current.value} to {target.value}")
+            event_id = str(uuid4())
+            connection.execute(
+                "UPDATE items SET listing_state = ?, updated_at = ? "
+                "WHERE store_id = ? AND item_id = ?",
+                (target.value, now, scope.store_id, item_id),
+            )
+            connection.execute(
+                "INSERT INTO item_events ("
+                "store_id, event_id, item_id, event_type, actor, occurred_at, "
+                "before_json, after_json"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    scope.store_id,
+                    event_id,
+                    item_id,
+                    event_type,
+                    actor,
+                    now,
+                    json.dumps({"listing_state": current.value}, sort_keys=True),
+                    json.dumps({"listing_state": target.value, "occurred_at": now}, sort_keys=True),
+                ),
+            )
+            self._bump_generation_on(connection, scope, _CATALOG_BUMP, now)
+        return MutationResult(item_id, changed=True, event_id=event_id)
+
+    def replace_item_image(
+        self,
+        scope: StoreScope,
+        *,
+        item_id: str,
+        image: ImageAttachment,
+        actor: str,
+    ) -> MutationResult:
+        """Point an item's current display image at new stored bytes.
+
+        The item keeps its identity and listing state. The index is left pending for
+        the existing indexer, and any previous embedding row stays in place but no
+        longer matches the item's stored image, so it is never ranked. Re-submitting
+        the item's current source bytes is a true no-op; source bytes already owned by
+        another item in this store are rejected.
+        """
+
+        _validate_capture_time(image.capture_time, image.capture_time_source)
+        validate_media_address(image.sha256, image.variant)
+        validate_media_address(image.source_sha256, image.variant)
+        if not image.media_type.startswith("image/"):
+            raise CatalogError("media_type must be an image media type")
+        if image.width <= 0 or image.height <= 0 or image.byte_size <= 0:
+            raise CatalogError("image dimensions and byte size must be positive")
+        if not actor:
+            raise CatalogError("item events require an actor")
+
+        capture_text = image.capture_time.isoformat() if image.capture_time is not None else None
+        connection = self._database.connection()
+        now = utc_now()
+        try:
+            with connection:
+                item = connection.execute(
+                    "SELECT listing_state FROM items WHERE store_id = ? AND item_id = ?",
+                    (scope.store_id, item_id),
+                ).fetchone()
+                if item is None:
+                    raise CatalogNotFoundError(item_id)
+                current = connection.execute(
+                    "SELECT sha256, source_sha256, capture_time, capture_time_source FROM images "
+                    "WHERE store_id = ? AND item_id = ? AND variant = ?",
+                    (scope.store_id, item_id, image.variant),
+                ).fetchone()
+                if current is None:
+                    raise CatalogError(f"item {item_id} has no stored display image to replace")
+                if str(current["source_sha256"]) == image.source_sha256:
+                    return MutationResult(item_id, changed=False)
+                owner = connection.execute(
+                    "SELECT item_id FROM images WHERE store_id = ? AND source_sha256 = ? "
+                    "AND variant = ?",
+                    (scope.store_id, image.source_sha256, image.variant),
+                ).fetchone()
+                if owner is not None:
+                    raise DuplicateImageError(str(owner["item_id"]))
+                event_id = str(uuid4())
+                connection.execute(
+                    "UPDATE images SET sha256 = ?, source_sha256 = ?, media_type = ?, "
+                    "width = ?, height = ?, byte_size = ?, capture_time = ?, "
+                    "capture_time_source = ? "
+                    "WHERE store_id = ? AND item_id = ? AND variant = ?",
+                    (
+                        image.sha256,
+                        image.source_sha256,
+                        image.media_type,
+                        image.width,
+                        image.height,
+                        image.byte_size,
+                        capture_text,
+                        image.capture_time_source.value,
+                        scope.store_id,
+                        item_id,
+                        image.variant,
+                    ),
+                )
+                connection.execute(
+                    "UPDATE items SET index_state = ?, index_attempts = 0, index_error = NULL, "
+                    "updated_at = ? WHERE store_id = ? AND item_id = ?",
+                    (IndexState.PENDING.value, now, scope.store_id, item_id),
+                )
+                connection.execute(
+                    "INSERT INTO item_events ("
+                    "store_id, event_id, item_id, event_type, actor, occurred_at, "
+                    "before_json, after_json"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        scope.store_id,
+                        event_id,
+                        item_id,
+                        "image_replaced",
+                        actor,
+                        now,
+                        json.dumps(
+                            {
+                                "image_sha256": str(current["sha256"]),
+                                "source_sha256": str(current["source_sha256"]),
+                                "capture_time": current["capture_time"],
+                                "capture_time_source": str(current["capture_time_source"]),
+                            },
+                            sort_keys=True,
+                        ),
+                        json.dumps(
+                            {
+                                "image_sha256": image.sha256,
+                                "source_sha256": image.source_sha256,
+                                "capture_time": capture_text,
+                                "capture_time_source": image.capture_time_source.value,
+                                "index_state": IndexState.PENDING.value,
+                            },
+                            sort_keys=True,
+                        ),
+                    ),
+                )
+                self._bump_generation_on(connection, scope, _CATALOG_BUMP, now)
+        except DuplicateImageError:
+            raise
+        except sqlite3.IntegrityError as error:
+            # The unique `(store_id, source_sha256, variant)` index is the race-safe
+            # backstop: a concurrent replacement claimed these bytes first.
+            duplicate = connection.execute(
+                "SELECT item_id FROM images WHERE store_id = ? AND source_sha256 = ? "
+                "AND variant = ?",
+                (scope.store_id, image.source_sha256, image.variant),
+            ).fetchone()
+            if duplicate is not None:
+                raise DuplicateImageError(str(duplicate["item_id"])) from error
+            raise CatalogConflictError(f"could not replace the image for {item_id}") from error
+        return MutationResult(item_id, changed=True, event_id=event_id)
+
     # -- embeddings ----------------------------------------------------------
 
     def put_ready_embedding(
@@ -1004,7 +1356,11 @@ class CatalogRepository:
         return self._index_rows(scope, (ListingState.PUBLISHED,))
 
     def _index_rows(
-        self, scope: StoreScope, states: Sequence[ListingState] | None
+        self,
+        scope: StoreScope,
+        states: Sequence[ListingState] | None,
+        *,
+        item_id: str | None = None,
     ) -> list[sqlite3.Row]:
         listing_filter = ""
         parameters: tuple[Any, ...] = (DISPLAY_VARIANT, scope.store_id)
@@ -1012,6 +1368,9 @@ class CatalogRepository:
             placeholders = ", ".join("?" for _ in states)
             listing_filter = f" AND items.listing_state IN ({placeholders})"
             parameters = (*parameters, *(state.value for state in states))
+        if item_id is not None:
+            listing_filter += " AND items.item_id = ?"
+            parameters = (*parameters, item_id)
         return (
             self._database.connection()
             .execute(
@@ -1087,6 +1446,16 @@ def _validate_item(
 ) -> None:
     if not isinstance(item_id, str) or not _IDENTIFIER.fullmatch(item_id):
         raise CatalogError("item_id must be a safe identifier")
+    _validate_metadata(title, category, price, price_kind)
+    if not isinstance(catalog_version, str) or not catalog_version:
+        raise CatalogError("catalog_version is required")
+    if isinstance(sort_order, bool) or not isinstance(sort_order, int) or sort_order < 0:
+        raise CatalogError("sort_order must be a nonnegative integer")
+
+
+def _validate_metadata(title: str, category: str, price: Decimal | None, price_kind: str) -> None:
+    """Validate the merchant-amendable fields shared by insert and update."""
+
     if not isinstance(title, str) or not title.strip():
         raise CatalogError("title must be a non-empty string")
     if not isinstance(category, str) or not category.strip():
@@ -1101,10 +1470,23 @@ def _validate_item(
             raise CatalogError("price must be a finite nonnegative Decimal")
         if price_kind == "unknown":
             raise CatalogError("a known price cannot use price_kind=unknown")
-    if not isinstance(catalog_version, str) or not catalog_version:
-        raise CatalogError("catalog_version is required")
-    if isinstance(sort_order, bool) or not isinstance(sort_order, int) or sort_order < 0:
-        raise CatalogError("sort_order must be a nonnegative integer")
+
+
+def _metadata_payload(
+    title: str, category: str, price: Decimal | None, price_kind: str
+) -> dict[str, Any]:
+    """Serializable before/after payload for one metadata change."""
+
+    return {
+        "title": title,
+        "category": category,
+        "price": _price_text(price),
+        "price_kind": price_kind,
+    }
+
+
+def _price_text(price: Decimal | None) -> str | None:
+    return None if price is None else str(price)
 
 
 def _validate_capture_time(

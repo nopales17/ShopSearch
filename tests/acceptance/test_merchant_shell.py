@@ -391,3 +391,44 @@ class MerchantShellTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_demo_store_item_pages_are_read_only(self) -> None:
+        visitor = self.app.test_client()
+        login = self.login(DEMO_HOST, "dana", DEMO_PASSWORD, client=visitor)
+        self.assertEqual(login.status_code, 303)
+        manage = visitor.get("/manage", base_url=DEMO_HOST)
+        self.assertNotIn(b"/manage/items/", manage.data, "demo stores expose no edit links")
+        csrf = self.csrf_token(manage)
+        with CatalogRepository.open(self.database_path) as catalog:
+            scope = self.demo.scope
+            before = (
+                catalog.item_count(scope),
+                catalog.image_count(scope),
+                catalog.event_count(scope),
+                catalog.generations(scope).catalog,
+            )
+        page = visitor.get("/manage/items/pitch-128096", base_url=DEMO_HOST)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"illustrative demo", page.data)
+        self.assertNotIn(b'name="price"', page.data)
+        for suffix, data in (
+            ("edit", {"title": "x", "category": "", "price": "1.00"}),
+            ("listing", {"action": "hide"}),
+        ):
+            with self.subTest(action=suffix):
+                response = visitor.post(
+                    f"/manage/items/pitch-128096/{suffix}",
+                    base_url=DEMO_HOST,
+                    data={"csrf_token": csrf, **data},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(b"illustrative demo", response.data)
+        with CatalogRepository.open(self.database_path) as catalog:
+            scope = self.demo.scope
+            after = (
+                catalog.item_count(scope),
+                catalog.image_count(scope),
+                catalog.event_count(scope),
+                catalog.generations(scope).catalog,
+            )
+        self.assertEqual(after, before)

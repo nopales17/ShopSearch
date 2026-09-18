@@ -21,10 +21,11 @@ from backend.catalog.store_repository import (
     CatalogRepository,
     DuplicateImageError,
     ImageAttachment,
+    MutationResult,
 )
 from backend.media.image_store import DISPLAY_VARIANT, ImageStore
 from backend.media.uploads import validate_upload
-from contracts.catalog import CaptureTimeSource, EvidenceRef, ObservationSource
+from contracts.catalog import CaptureTimeSource, EvidenceRef, ListingState, ObservationSource
 from contracts.store import Store, StoreScope
 
 UNKNOWN_TITLE = "Untitled item"
@@ -32,6 +33,15 @@ UNKNOWN_CATEGORY = "Uncategorized"
 MAX_PRICE_DECIMALS = 2
 MAX_TITLE_LENGTH = 120
 MAX_CATEGORY_LENGTH = 60
+
+# The explicit S8 listing operations. The form only ever names one of these; the
+# repository refuses any transition outside `LISTING_TRANSITIONS`.
+LISTING_ACTIONS: dict[str, ListingState] = {
+    "hide": ListingState.HIDDEN,
+    "unhide": ListingState.PUBLISHED,
+    "sold": ListingState.SOLD,
+    "relist": ListingState.PUBLISHED,
+}
 
 
 class PublishError(ValueError):
@@ -42,6 +52,14 @@ class PublishError(ValueError):
 class PublishedItem:
     item_id: str
     duplicate: bool = False
+    capture_time: datetime | None = None
+    capture_time_source: CaptureTimeSource = CaptureTimeSource.UNKNOWN
+
+
+@dataclass(frozen=True)
+class ImageReplacement:
+    item_id: str
+    changed: bool
     capture_time: datetime | None = None
     capture_time_source: CaptureTimeSource = CaptureTimeSource.UNKNOWN
 
@@ -149,27 +167,134 @@ class MerchantPublisher:
                 actor=merchant_id,
             )
         except DuplicateImageError as duplicate:
-            self._discard_unreferenced_derivative(scope, display_sha256, duplicate.item_id)
+            # The bytes belong to the row that caused the conflict; only unwind a
+            # blob this call wrote itself.
+            if created_blob:
+                self._discard_unreferenced_derivative(scope, display_sha256)
             return PublishedItem(duplicate.item_id, duplicate=True)
         except Exception:
             if created_blob:
-                self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
+                self._discard_unreferenced_derivative(scope, display_sha256)
             raise
         return PublishedItem(item_id, capture_time=capture_time, capture_time_source=capture_source)
 
-    def _discard_unreferenced_derivative(
-        self, scope: StoreScope, display_sha256: str, existing_item_id: str
-    ) -> None:
-        """Keep stored bytes when the represented item already serves these bytes.
+    # -- S8 merchant operations ----------------------------------------------
 
-        A losing concurrent publication must not delete the winner's blob, so only an
-        address no represented item uses is removed.
+    def edit_item(
+        self,
+        *,
+        merchant_id: str,
+        item_id: str,
+        title: object,
+        category: object,
+        price: object,
+    ) -> MutationResult:
+        """Amend one item's title, category and price (blank price means unknown)."""
+
+        scope = self._require_live(merchant_id)
+        price_value = parse_price_input(price)
+        return self._catalog.update_item_metadata(
+            scope,
+            item_id=item_id,
+            title=_clean_text(title, MAX_TITLE_LENGTH) or UNKNOWN_TITLE,
+            category=_clean_text(category, MAX_CATEGORY_LENGTH) or UNKNOWN_CATEGORY,
+            price=price_value,
+            price_kind="unknown" if price_value is None else "known",
+            actor=merchant_id,
+        )
+
+    def transition_listing(
+        self, *, merchant_id: str, item_id: str, action: object
+    ) -> MutationResult:
+        """Apply one named listing action; the repository refuses anything else."""
+
+        scope = self._require_live(merchant_id)
+        target = LISTING_ACTIONS.get(str(action))
+        if target is None:
+            raise PublishError("That action is not available.")
+        return self._catalog.transition_listing_state(
+            scope, item_id=item_id, target=target, actor=merchant_id
+        )
+
+    def replace_image(
+        self,
+        *,
+        merchant_id: str,
+        item_id: str,
+        photo: bytes,
+        declared_content_type: object,
+        attested_capture: bool,
+    ) -> ImageReplacement:
+        """Swap one item's current image through the S7 upload pipeline."""
+
+        scope = self._require_live(merchant_id)
+        store_timezone = ZoneInfo(self._store.timezone)
+        upload = validate_upload(
+            photo, declared_content_type=declared_content_type, store_timezone=store_timezone
+        )
+        capture_time, capture_source = self._capture_provenance(
+            upload.derivative.capture_time,
+            upload.derivative.capture_time_source,
+            attested=attested_capture,
+            store_timezone=store_timezone,
+        )
+        derivative = upload.derivative
+        display_sha256 = hashlib.sha256(derivative.data).hexdigest()
+        created_blob = self._image_store.put(
+            scope, display_sha256, DISPLAY_VARIANT, derivative.data
+        )
+        try:
+            outcome = self._catalog.replace_item_image(
+                scope,
+                item_id=item_id,
+                image=ImageAttachment(
+                    sha256=display_sha256,
+                    source_sha256=upload.source_sha256,
+                    media_type=derivative.media_type,
+                    width=derivative.width,
+                    height=derivative.height,
+                    byte_size=len(derivative.data),
+                    capture_time=capture_time,
+                    capture_time_source=capture_source,
+                ),
+                actor=merchant_id,
+            )
+        except DuplicateImageError as error:
+            if created_blob:
+                self._discard_unreferenced_derivative(scope, display_sha256)
+            raise PublishError(
+                "Those photo bytes already belong to another item in this store."
+            ) from error
+        except Exception:
+            if created_blob:
+                self._discard_unreferenced_derivative(scope, display_sha256)
+            raise
+        if not outcome.changed and created_blob:
+            # Re-submitting the item's current source bytes is a true no-op.
+            self._discard_unreferenced_derivative(scope, display_sha256)
+        return ImageReplacement(
+            item_id, outcome.changed, capture_time=capture_time, capture_time_source=capture_source
+        )
+
+    def _discard_unreferenced_derivative(self, scope: StoreScope, display_sha256: str) -> None:
+        """Keep stored bytes while any item in this store still references them.
+
+        A losing concurrent publication or replacement must not delete the winner's
+        blob, and a duplicate of a hidden or sold item's source bytes must not delete
+        that item's referenced bytes either. Only an address that no image row in the
+        store uses, in any listing state, is removed.
         """
 
-        existing = self._catalog.display_image(scope, existing_item_id)
-        if existing is not None and existing.sha256 == display_sha256:
+        if self._catalog.image_address_in_use(scope, display_sha256, DISPLAY_VARIANT):
             return
         self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
+
+    def _require_live(self, merchant_id: str) -> StoreScope:
+        if not merchant_id:
+            raise PublishError("A merchant session is required.")
+        if self._store.is_demo:
+            raise PublishError("This storefront is an illustrative demo and cannot be edited.")
+        return self._store.scope
 
     def _capture_provenance(
         self,

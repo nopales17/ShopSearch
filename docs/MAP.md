@@ -134,7 +134,9 @@ that keeps demo/fixture and merchant-self traffic out of customer denominators. 
 implemented: founder-provisioned merchants, store-scoped sessions, CSRF-protected
 sign-in/out and the management shell. S7 is implemented: authenticated photo+price
 publication into a live store, with bounded upload validation, capture provenance,
-duplicate-byte reuse and indexing handed to the existing indexer. S8-S10 are not
+duplicate-byte reuse and indexing handed to the existing indexer. S8 is implemented:
+authenticated amend, hide/unhide, sold/relist and photo replacement, one atomic catalog
+mutation per action with an item event and a catalog-generation bump. S9-S10 are not
 implemented.
 
 S5 moves platform telemetry to the store-scoped `telemetry_events` table (indexed on
@@ -155,10 +157,10 @@ S6 adds founder-provisioned merchant authentication. `backend/auth/` owns passwo
 service, the process-local failed-login limiter and the cookie/CSRF helpers
 (`service.py`), and the provisioning CLI (`cli.py`: interactive prompts, never
 password arguments). `contracts/auth.py` carries `MerchantIdentity`/`MerchantSession`.
-`apps/web/manage.py` and `manage_views.py` render the read-only `/manage`,
-`/manage/login` and `/manage/logout` shell; `apps/web/wsgi.py` resolves the store and
-then that store's merchant session, and classifies public storefront traffic from a
-valid session as `merchant_self`. `docs/CREDENTIALS.md` records operator notes.
+`apps/web/manage.py` and `manage_views.py` render the `/manage`, `/manage/login` and
+`/manage/logout` shell; `apps/web/wsgi.py` resolves the store and then that store's
+merchant session, and classifies public storefront traffic from a valid session as
+`merchant_self`. `docs/CREDENTIALS.md` records operator notes.
 
 S7 adds mobile publish. `backend/media/uploads.py` bounds an upload (12 MiB), sniffs the
 decoded format (JPEG/PNG/WebP only, no HEIC), rejects a declared content type that
@@ -171,6 +173,22 @@ serves the authenticated `/manage/publish` form (photo with camera capture, opti
 price/title/category, capture attestation, CSRF), and `apps/web/wsgi.py` refreshes the
 cached storefront application whenever the store's catalog generation changes so a new
 item is browsable in the same request cycle.
+
+S8 adds merchant correction and withdrawal on `/manage/items/<item_id>`.
+`backend/catalog/store_repository.py` owns the atomic mutations
+(`update_item_metadata`, `transition_listing_state`, `replace_item_image`), each writing
+one `item_events` row with before/after state and bumping the catalog generation once in
+the same transaction, plus the explicit `LISTING_TRANSITIONS` rule (only
+`published`↔`hidden`, `published`→`sold`, `sold`→`published`) and the internal
+`current_image()`/`image_address_in_use()` lookups that see every listing state while
+`display_image()` stays published-only for customers. `backend/catalog/publish.py`
+exposes the matching merchant operations and never deletes a content-addressed blob that
+any image row in the store still references, so duplicate bytes of a hidden or sold item
+cannot destroy that item's media. `apps/web/manage_views.py` renders the item page's
+edit, listing and photo-replacement forms (all CSRF-protected and usable at 375 px), and
+`apps/web/manage.py` maps only the four named listing actions, records the authenticated
+merchant as actor, and returns one non-disclosing response for an unknown item and for
+another store's item ID.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

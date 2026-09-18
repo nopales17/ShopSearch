@@ -1,22 +1,44 @@
-"""Minimal server-rendered pages for the read-only merchant shell (S6).
+"""Minimal server-rendered pages for the merchant shell and item controls.
 
 Branding comes from the store record; no item content is rendered for a request that
-is not authenticated as that store's merchant.
+is not authenticated as that store's merchant. The item page carries the S8
+amend/hide/sold/replace controls, and demo stores stay read-only.
 """
 
 from __future__ import annotations
 
 from html import escape
 from typing import Sequence
+from urllib.parse import quote
 
 from backend.catalog.store_repository import ManagedItem
 from contracts.auth import MerchantIdentity
+from contracts.catalog import ListingState
 from contracts.store import Store
 
 LOGIN_PATH = "/manage/login"
 MANAGE_PATH = "/manage"
 LOGOUT_PATH = "/manage/logout"
 PUBLISH_PATH = "/manage/publish"
+ITEM_PATH = "/manage/items"
+
+# The explicit listing controls the item page offers, keyed by the item's state.
+LISTING_CONTROLS: dict[ListingState, tuple[tuple[str, str], ...]] = {
+    ListingState.PUBLISHED: (("hide", "Hide"), ("sold", "Mark sold")),
+    ListingState.HIDDEN: (("unhide", "Unhide"),),
+    ListingState.SOLD: (("relist", "Relist"),),
+    ListingState.DRAFT: (),
+}
+
+NOTICE_MESSAGES = {
+    "saved": "Saved changes.",
+    "unchanged": "Nothing changed.",
+    "hidden": "Item hidden.",
+    "unhidden": "Item is visible again.",
+    "sold": "Item marked sold.",
+    "relisted": "Item relisted.",
+    "replaced": "Photo replaced; the old description search entry is cleared.",
+}
 
 _STYLE = (
     "*,*::before,*::after{box-sizing:border-box}"
@@ -66,6 +88,16 @@ def message_page(store: Store, title: str, message: str) -> str:
     )
 
 
+def not_found_page(store: Store, message: str) -> str:
+    """A non-disclosing page for an unknown or foreign item."""
+
+    return page(
+        store,
+        "Not found",
+        f'<h1>Not found</h1><p>{escape(message)}</p><p><a href="{MANAGE_PATH}">Back to inventory</a></p>',
+    )
+
+
 def manage_page(
     store: Store,
     identity: MerchantIdentity,
@@ -76,18 +108,21 @@ def manage_page(
     error: str = "",
 ) -> str:
     unknown_price = store.presentation.price_unknown_label
+    editable = not store.is_demo
     rows = "".join(
         "<tr><td>{title}<br><small><code>{item_id}</code></small></td><td>{category}</td>"
-        "<td>{price}</td><td>{listing}</td><td>{index}</td></tr>".format(
+        "<td>{price}</td><td>{listing}</td><td>{index}</td>{actions}</tr>".format(
             title=_item_link(store, item),
             item_id=escape(item.item_id),
             category=escape(item.category),
             price=escape(f"{item.price:.2f}" if item.price is not None else unknown_price),
             listing=escape(item.listing_state.value),
             index=escape(item.index_state.value),
+            actions=(f'<td><a href="{item_path(item.item_id)}">Edit</a></td>' if editable else ""),
         )
         for item in items
     )
+    actions_head = "<th>Manage</th>" if editable else ""
     publish_block = (
         f"""<section><h2>Add an item</h2>
 {"<p class='error' role='alert'>" + escape(error) + "</p>" if error else ""}
@@ -114,8 +149,81 @@ def manage_page(
 {status}
 <p class="note">{len(items)} items in this store's represented catalog.</p>
 {publish_block}
-<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Listing state</th><th>Index state</th></tr></thead><tbody>{rows}</tbody></table></div>""",
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Listing state</th><th>Index state</th>{actions_head}</tr></thead><tbody>{rows}</tbody></table></div>""",
     )
+
+
+def item_page(
+    store: Store,
+    identity: MerchantIdentity,
+    item: ManagedItem,
+    csrf_token: str,
+    *,
+    notice: str = "",
+    error: str = "",
+) -> str:
+    """One item's S8 controls: amend, hide/unhide, sold/relist, replace photo."""
+
+    unknown_price = store.presentation.price_unknown_label
+    price_value = "" if item.price is None else f"{item.price:.2f}"
+    status = ""
+    if notice:
+        status = f'<p class="ok" role="status">{escape(notice)}</p>'
+    if error:
+        status += f'<p class="error" role="alert">{escape(error)}</p>'
+    base = item_path(item.item_id)
+    summary = (
+        f"<p class='note'><code>{escape(item.item_id)}</code> · "
+        f"{escape(item.listing_state.value)} · index {escape(item.index_state.value)} · "
+        f"{escape(unknown_price if item.price is None else price_value)}</p>"
+    )
+    if store.is_demo:
+        return page(
+            store,
+            "Item",
+            f"<h1>{escape(item.title)}</h1>{summary}"
+            '<p class="note">This storefront is an illustrative demo and cannot be edited.</p>'
+            f'<p><a href="{MANAGE_PATH}">Back to inventory</a></p>',
+        )
+    controls = "".join(
+        f'<button type="submit" name="action" value="{escape(action)}">{escape(label)}</button>'
+        for action, label in LISTING_CONTROLS[item.listing_state]
+    )
+    listing_block = (
+        f"""<section><h2>Listing</h2>
+<form method="post" action="{base}/listing">
+<input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
+{controls}</form></section>"""
+        if controls
+        else ""
+    )
+    return page(
+        store,
+        item.title,
+        f"""<h1>{escape(item.title)}</h1>
+{summary}
+{status}
+<p class="note">Signed in as {escape(identity.username)}.</p>
+<section><h2>Edit details</h2>
+<form method="post" action="{base}/edit">
+<input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
+<label>Title <input name="title" maxlength="120" value="{escape(item.title)}"></label>
+<label>Category <input name="category" maxlength="60" value="{escape(item.category)}"></label>
+<label>Price <input name="price" inputmode="decimal" autocomplete="off" value="{escape(price_value)}" placeholder="Leave blank if unknown"></label>
+<button type="submit">Save changes</button></form></section>
+{listing_block}
+<section><h2>Replace photo</h2>
+<form method="post" action="{base}/replace" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
+<label>New photo <input type="file" name="photo" accept="image/*" capture="environment" required></label>
+<label class="check"><input type="checkbox" name="attested_capture" value="yes"> I just took this photo</label>
+<button type="submit">Replace photo</button></form></section>
+<p><a href="{MANAGE_PATH}">Back to inventory</a></p>""",
+    )
+
+
+def item_path(item_id: str) -> str:
+    return f"{ITEM_PATH}/{quote(item_id, safe='')}"
 
 
 def _item_link(store: Store, item: ManagedItem) -> str:

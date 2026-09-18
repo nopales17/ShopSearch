@@ -77,9 +77,24 @@ from EXIF when present, otherwise from the attestation with source
 the same store reuses the stored blob and creates nothing new. Indexing stays the
 existing S4 indexer: the item is browsable immediately and becomes visual-text
 searchable after one indexer run, with no further merchant action.
+S8 adds the merchant correction and withdrawal operations on `/manage/items/<id>`:
+amend title/category/price (blank stays unknown), hide/unhide, mark sold/relist, and
+replace the photo through the same bounded S7 upload pipeline. Each real change is one
+atomic catalog mutation: exactly one `item_events` row with before and after state and
+the authenticated merchant as actor, plus exactly one catalog-generation bump, in the
+same transaction. `draft` remains unreachable and only `published`↔`hidden`,
+`published`→`sold` and `sold`→`published` are accepted, so hiding, selling and relisting
+preserve the item, its history and its media. An unchanged submission is a true no-op
+with no event and no bump. Image replacement keeps the item's identity and listing
+state, resets `index_state` to `pending`, and leaves the previous embedding row in
+place but unusable because its `image_sha256` no longer matches; the item stays
+browsable and is excluded from visual-text ranking until the existing S4 indexer runs
+once. The internal catalog lookup that mutation and duplicate-cleanup paths use works
+for every listing state, so duplicate source bytes belonging to a hidden or sold item
+can no longer delete that item's referenced blob.
 
 ## Verification
-168 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+206 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -141,6 +156,19 @@ error, distinguishable EXIF/merchant-attestation/unknown capture provenance, dup
 byte reuse without a second image row or mutation, cross-store non-deduplication,
 auth/CSRF failures creating no state, demo stores having no publish form or publish
 path, orphan-blob cleanup on a failed publication, and a structural 375px form check.
+S8 adds unit and HTTP acceptance coverage for each mutation's exact counts (one event
+and one catalog-generation bump per real change; zero for a no-op edit, a repeated
+listing action or a current-bytes replacement), before/after event payloads with the
+acting merchant, rejection of transitions outside the four allowed ones, price
+known→unknown→known changing bounded-price results immediately while the item stays
+browsable, hide/unhide and sold/relist changing browse, detail, media and price-search
+surfaces in the same request cycle with media retained and the item id and history
+preserved, image replacement leaving a published item browsable with the old vector
+excluded and one indexer run rebinding it to the new image, duplicate owned by a hidden
+item not deleting that item's blob, a simultaneous identical replacement resolved by
+the migration-0006 unique index with one caller receiving the duplicate outcome, and
+cross-store item ids returning the same non-disclosing response as an unknown item for
+reads and every mutation while changing no item, image, event, generation or blob.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -180,8 +208,8 @@ file is an import/parity source only, so after an image change the old vector st
 `stale` (never ranked) until the indexer runs. Only the demo store is provisioned with a
 catalog in the composition, and a resolved store without one gets 404 rather than another
 store's catalog (S9 hardens this with a second real store). The indexer is a component
-plus a CLI, not a daemon thread: S4 has no runtime producer of pending items because
-merchant uploads arrive in S7, and no generic job framework is introduced. Coverage
+plus a CLI, not a daemon thread: the only runtime producers of `pending` items are the
+S7 publish and S8 replacement operations, and no generic job framework is introduced. Coverage
 counts and disclosure wording come from the store record, but the notice itself renders
 client-side from the search response so the server-rendered page bytes stay unchanged.
 JSONL telemetry remains only for the retired Issue #1 fixture slice; the platform
@@ -195,9 +223,10 @@ cookie means a browser only accepts it over HTTPS or a localhost origin, so plai
 acceptance tests use the WSGI test client with an `https://` base URL while the
 unauthenticated redirect is also exercised over real loopback HTTP. Login throttling is
 process-local by design for the one-process runtime, there is no account deletion,
-roles, self-service signup, or email, and `/manage` is read-only in this slice. Served
-media is a local content-addressed filesystem store; backup, restore and media
-synchronisation are S10.
+roles, self-service signup, or email, and `/manage` can only amend an existing item
+(title/category/price), hide/unhide it, mark it sold/relist it or replace its photo;
+bulk edits, scheduling and deletion are not implemented. Served media is a local
+content-addressed filesystem store; backup, restore and media synchronisation are S10.
 Merchant publication is bounded to 12 MiB per photo and to JPEG/PNG/WebP, so HEIC
 photos from some phones are rejected until ADR-0004 is amended; the request cap is that
 byte cap plus multipart framing. Publishing is limited to live stores: the demo store
@@ -244,16 +273,21 @@ merchant accounts, store-scoped sessions, CSRF-protected sign-in/out, the read-o
 management shell and merchant-self traffic classification. S7 is implemented:
 authenticated photo+price publication with bounded upload validation, capture
 provenance, duplicate-byte reuse and the existing indexer as the only indexing step.
-S8-S10 are not implemented yet.
+S8 is implemented: authenticated amend, hide/unhide, sold/relist and photo replacement,
+each one atomic catalog mutation with one item event and one catalog-generation bump,
+with hidden and sold items keeping their media and history. S9-S10 are not implemented
+yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S8 in `docs/SLICES.md`: amend, hide, mark sold and relist, with an item event and a
-catalog-generation bump for every mutation. Execute only S8; its acceptance criteria and
-non-goals are in the slice register, and the escalation rules in AGENTS apply. Do not
-pull later slices forward.
+S9 in `docs/SLICES.md`: prove isolation adversarially with a second real store — its own
+hostname, branding, catalog, merchant accounts and telemetry, plus the adversarial test
+suite, the import-boundary test and a review that every store-scoped table carries
+composite store-scoped keys. Execute only S9; its acceptance criteria and non-goals are
+in the slice register, and the escalation rules in AGENTS apply. Do not pull later
+slices forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

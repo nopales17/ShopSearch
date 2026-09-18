@@ -1,9 +1,9 @@
-"""Merchant shell: sign in, sign out, `/manage` and photo+price publish (S6/S7).
+"""Merchant shell: sign in, sign out, `/manage` and merchant catalog mutations.
 
 The store is resolved from the hostname before this shell runs, and every session
 lookup is scoped to that store, so a session from another store yields no identity.
 State-changing requests carry a CSRF token; login failures are generic; publication
-accepts no store or merchant identifier from the form.
+and the S8 amendments accept no store or merchant identifier from the form.
 """
 
 from __future__ import annotations
@@ -25,7 +25,12 @@ from backend.auth.service import (
     merchant_cookie_header,
 )
 from backend.catalog.publish import MerchantPublisher, PublishError
-from backend.catalog.store_repository import CatalogError, CatalogRepository
+from backend.catalog.store_repository import (
+    CatalogError,
+    CatalogNotFoundError,
+    CatalogRepository,
+    ManagedItem,
+)
 from backend.media.uploads import UploadError
 from backend.search.vector_source import EMBEDDING_DIMENSIONS
 from contracts.auth import MerchantSession
@@ -39,6 +44,13 @@ HANDLED_PATHS = (
 )
 
 _ATTESTED_VALUES = frozenset({"yes", "on", "true", "1"})
+_ITEM_ACTIONS = frozenset({"edit", "listing", "replace"})
+_LISTING_NOTICES = {
+    "hide": "hidden",
+    "unhide": "unhidden",
+    "sold": "sold",
+    "relist": "relisted",
+}
 
 
 @dataclass(frozen=True)
@@ -83,7 +95,7 @@ class MerchantShell:
         self._dimensions = dimensions
 
     def handles(self, path: str) -> bool:
-        return path in HANDLED_PATHS
+        return path in HANDLED_PATHS or path.startswith(f"{views.ITEM_PATH}/")
 
     def handle(
         self,
@@ -113,6 +125,8 @@ class MerchantShell:
             if method != "POST":
                 return _method_not_allowed()
             return self._publish(cookies, form, files or {})
+        if path.startswith(f"{views.ITEM_PATH}/"):
+            return self._item_route(method, path, cookies, form, files or {}, query or {})
         return ShellResponse(404, "Not found", content_type="text/plain; charset=utf-8")
 
     # -- routes --------------------------------------------------------------
@@ -185,6 +199,130 @@ class MerchantShell:
         if outcome.duplicate:
             location += "&duplicate=1"
         return _redirect(location)
+
+    # -- S8 item management --------------------------------------------------
+
+    def _item_route(
+        self,
+        method: str,
+        path: str,
+        cookies: Mapping[str, str],
+        form: Mapping[str, str],
+        files: Mapping[str, UploadedPhoto],
+        query: Mapping[str, str],
+    ) -> ShellResponse:
+        remainder = path[len(views.ITEM_PATH) + 1 :]
+        parts = remainder.split("/")
+        if len(parts) == 1 and parts[0]:
+            item_id, action = parts[0], "view"
+        elif len(parts) == 2 and parts[0] and parts[1] in _ITEM_ACTIONS:
+            item_id, action = parts[0], parts[1]
+        else:
+            return ShellResponse(404, "Not found", content_type="text/plain; charset=utf-8")
+        session = self._auth.identify(cookies.get(MERCHANT_COOKIE))
+        if session is None:
+            return _redirect(views.LOGIN_PATH, cookies=(clear_cookie_header(MERCHANT_COOKIE),))
+        item = self._catalog.managed_item(
+            self._store.scope,
+            item_id,
+            model_id=self._model_id,
+            model_revision=self._model_revision,
+            dimensions=self._dimensions,
+        )
+        if action == "view":
+            if method != "GET":
+                return _method_not_allowed()
+            if item is None:
+                return self._item_not_found()
+            notice = views.NOTICE_MESSAGES.get(str(query.get("updated", "")), "")
+            return self._item_page(session, item, notice=notice)
+        if method != "POST":
+            return _method_not_allowed()
+        # A foreign or unknown item gets the same non-disclosing response as a
+        # missing one, whatever the CSRF state, and mutates nothing.
+        if item is None:
+            return self._item_not_found()
+        if not csrf_matches(form.get("csrf_token"), session.csrf_token):
+            return ShellResponse(
+                400,
+                views.message_page(self._store, "Item", "This request could not be verified."),
+            )
+        return self._item_mutation(session, item, action, form, files)
+
+    def _item_mutation(
+        self,
+        session: MerchantSession,
+        item: ManagedItem,
+        action: str,
+        form: Mapping[str, str],
+        files: Mapping[str, UploadedPhoto],
+    ) -> ShellResponse:
+        merchant_id = session.identity.merchant_id
+        try:
+            if action == "edit":
+                outcome = self._publisher.edit_item(
+                    merchant_id=merchant_id,
+                    item_id=item.item_id,
+                    title=form.get("title"),
+                    category=form.get("category"),
+                    price=form.get("price"),
+                )
+                notice = "saved" if outcome.changed else "unchanged"
+            elif action == "listing":
+                action_name = str(form.get("action", ""))
+                outcome = self._publisher.transition_listing(
+                    merchant_id=merchant_id, item_id=item.item_id, action=action_name
+                )
+                notice = (
+                    _LISTING_NOTICES.get(action_name, "unchanged")
+                    if outcome.changed
+                    else "unchanged"
+                )
+            else:
+                photo = files.get("photo")
+                if photo is None or not photo.data:
+                    return self._item_page(
+                        session, item, error="Choose a photo to upload.", status=400
+                    )
+                replacement = self._publisher.replace_image(
+                    merchant_id=merchant_id,
+                    item_id=item.item_id,
+                    photo=photo.data,
+                    declared_content_type=photo.content_type,
+                    attested_capture=(
+                        str(form.get("attested_capture", "")).strip().lower() in _ATTESTED_VALUES
+                    ),
+                )
+                notice = "replaced" if replacement.changed else "unchanged"
+        except CatalogNotFoundError:
+            return self._item_not_found()
+        except (PublishError, UploadError, CatalogError) as error:
+            return self._item_page(session, item, error=str(error), status=400)
+        return _redirect(f"{views.item_path(item.item_id)}?updated={quote(notice, safe='')}")
+
+    def _item_page(
+        self,
+        session: MerchantSession,
+        item: ManagedItem,
+        *,
+        notice: str = "",
+        error: str = "",
+        status: int = 200,
+    ) -> ShellResponse:
+        return ShellResponse(
+            status,
+            views.item_page(
+                self._store, session.identity, item, session.csrf_token, notice=notice, error=error
+            ),
+        )
+
+    def _item_not_found(self) -> ShellResponse:
+        """One response for an unknown item and for another store's item."""
+
+        return ShellResponse(
+            404,
+            views.not_found_page(self._store, "That item is not in this store."),
+        )
 
     def _login_form(self, cookies: Mapping[str, str]) -> ShellResponse:
         if self._auth.identify(cookies.get(MERCHANT_COOKIE)) is not None:
