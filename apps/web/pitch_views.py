@@ -11,7 +11,7 @@ from __future__ import annotations
 from html import escape
 from urllib.parse import urlencode
 
-from backend.catalog.repository import LoadedCatalog
+from backend.catalog.read_model import LoadedCatalog
 from backend.search.price import parse_price
 from contracts.catalog import CatalogItem
 from contracts.store import HeroImage, Store, StorePresentation

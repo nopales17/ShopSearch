@@ -20,6 +20,23 @@ deterministic illustrative prices and source-title/technique words as tags. CLIP
 experiment's lexical comparator. `image_index.json` contains normalized CLIP vectors,
 pinned model/revision and catalog/evaluation hashes.
 
+## Store catalog import (S3)
+
+Since S3 this directory is the reviewed **import source**, not the runtime catalog.
+`python -m tools.import_pitch_catalog` (and local server startup) validate the dataset
+and import it into the store-scoped `items`/`images`/`item_events` tables for
+`pitch-demo`. Each import verifies the source bytes against the recorded
+`image_sha256`, stores that source hash as `source_sha256`, and renders one EXIF-free
+`display` derivative through the `ImageStore`, addressed by `(store_id, sha256,
+variant)`. Only derivatives are served; the retained `images/` files stay as reviewed
+source artifacts and are never served publicly.
+
+Every source record has `photo_captured_at: null`, so imported capture time is unknown
+with source `unknown`. `source_reviewed_at` is a source-review timestamp, not a capture
+time, and is never written into a capture-time field. Re-importing an unchanged dataset
+creates no item, image, event or blob; changed content is reported as drift instead of
+being silently rewritten.
+
 Normal setup uses the committed dataset/index. For a deliberate dataset revision,
 `tools/prepare_pitch_photos.py --source PATH_TO_API_JSON` prepares candidates and
 contact sheets in ignored `data/local/`; `--publish` publishes the manual selection.

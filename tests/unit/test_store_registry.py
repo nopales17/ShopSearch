@@ -32,9 +32,10 @@ class MigrationTest(unittest.TestCase):
             connection = platform_db.connect(Path(directory) / "shopsearch.sqlite3")
             try:
                 applied = platform_db.apply_migrations(connection)
-                self.assertEqual(applied, ("0001_store_registry.sql",))
+                self.assertEqual(applied, ("0001_store_registry.sql", "0002_catalog_and_media.sql"))
                 self.assertEqual(
-                    platform_db.applied_versions(connection), ("0001_store_registry.sql",)
+                    platform_db.applied_versions(connection),
+                    ("0001_store_registry.sql", "0002_catalog_and_media.sql"),
                 )
                 tables = {
                     row["name"]
@@ -42,14 +43,18 @@ class MigrationTest(unittest.TestCase):
                         "SELECT name FROM sqlite_master WHERE type = 'table'"
                     )
                 }
-                self.assertLessEqual({"stores", "store_domains", "schema_migrations"}, tables)
+                self.assertLessEqual(
+                    {"stores", "store_domains", "items", "images", "item_events"},
+                    tables,
+                )
                 self.assertEqual(connection.execute("PRAGMA foreign_keys").fetchone()[0], 1)
                 self.assertEqual(
                     connection.execute("PRAGMA journal_mode").fetchone()[0].lower(), "wal"
                 )
                 self.assertEqual(platform_db.apply_migrations(connection), ())
                 self.assertEqual(
-                    platform_db.applied_versions(connection), ("0001_store_registry.sql",)
+                    platform_db.applied_versions(connection),
+                    ("0001_store_registry.sql", "0002_catalog_and_media.sql"),
                 )
             finally:
                 connection.close()
@@ -96,7 +101,6 @@ class StoreRegistryTest(unittest.TestCase):
         document = demo_document()
         document["store_id"] = "second-store"
         document["is_demo"] = False
-        document["catalog_path"] = None
         document["domains"] = ["Shop.Example.com"]
         store, domains = load_store_config_in_memory(document)
         self.repository.create_store(store, domains)
@@ -138,7 +142,6 @@ class StoreRegistryTest(unittest.TestCase):
         document = demo_document()
         document["store_id"] = "cli-store"
         document["is_demo"] = False
-        document["catalog_path"] = None
         document["domains"] = []
         config = self.root / "cli-store.json"
         config.write_text(json.dumps(document))
@@ -221,7 +224,11 @@ class HostResolverTest(unittest.TestCase):
 class PersistenceImportBoundaryTest(unittest.TestCase):
     """Only the persistence layer may import sqlite3 or the connection factory."""
 
-    ALLOWED = {"backend/platform/db.py", "backend/stores/repository.py"}
+    ALLOWED = {
+        "backend/platform/db.py",
+        "backend/stores/repository.py",
+        "backend/catalog/store_repository.py",
+    }
 
     def test_sqlite3_and_connection_factory_stay_in_the_persistence_layer(self) -> None:
         offenders: list[str] = []

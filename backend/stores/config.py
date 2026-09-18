@@ -31,7 +31,6 @@ def load_store_config_in_memory(document: Mapping[str, Any]) -> tuple[Store, tup
         timezone=_required_string(document, "timezone"),
         is_demo=_required_bool(document, "is_demo"),
         presentation=presentation,
-        catalog_path=_optional_string(document, "catalog_path"),
     )
     validate_store(store)
     return store, tuple(domains)
@@ -96,15 +95,6 @@ def _required_string(record: Mapping[str, Any], field: str) -> str:
     value = record.get(field)
     if not isinstance(value, str) or not value.strip():
         raise StoreValidationError(f"{field} must be a non-empty string")
-    return value
-
-
-def _optional_string(record: Mapping[str, Any], field: str) -> str | None:
-    value = record.get(field)
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise StoreValidationError(f"{field} must be a non-empty string when present")
     return value
 
 

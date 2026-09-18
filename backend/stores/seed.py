@@ -33,7 +33,7 @@ def seed_store(repository: StoreRepository, config_path: Path) -> Store:
 
 
 def _require_same_record(existing: Store, configured: Store) -> None:
-    fields = ("display_name", "currency", "timezone", "is_demo", "catalog_path")
+    fields = ("display_name", "currency", "timezone", "is_demo")
     for field in fields:
         if getattr(existing, field) != getattr(configured, field):
             raise StoreValidationError(

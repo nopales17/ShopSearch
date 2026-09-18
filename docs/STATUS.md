@@ -22,9 +22,17 @@ from `data/stores/pitch-demo.json`. The demo store's wordmark, hero images, cate
 list, query chips, credits, disclosures and public claim wording are now store
 configuration; the storefront renders byte-identically to S1. An unregistered Host
 gets a 404 with no store data, and only the persistence layer imports `sqlite3`.
+S3 replaced the runtime JSON catalog with the store-scoped `CatalogRepository`
+(`items`, `images`, `item_events`; composite store-scoped keys; `draft`/`published`/
+`hidden`/`sold` listing state; independent `index_state` defaulting to `pending`) and
+a content-addressed `ImageStore` behind `media_url()`. The committed demo dataset is
+imported idempotently; served images are EXIF-free derivatives; capture time is taken
+only from image metadata and is otherwise unknown. Browse, detail and media routes read
+through the repository and media layer; search uses a compatibility vector source keyed
+by item ID, so ranking is unchanged.
 
 ## Verification
-50 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+82 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -33,6 +41,15 @@ loopback host resolution (`Shop.Example.COM:8443` / trailing dot / bare), unknow
 404 with no store data, CLI store creation and duplicate-hostname rejection, mandatory
 demo-disclosure enforcement, an import-boundary test for `sqlite3`, and golden-hash
 parity of the four deterministic demo pages against the pre-S2 bytes.
+S3 adds importer idempotence (a second run creates no item, image, event or blob),
+stored-SHA/byte verification for every imported image, EXIF/GPS/DateTimeOriginal
+absence in served derivatives, unknown-capture-time enforcement plus schema checks,
+listing-state filtering, composite-FK rejection of a cross-store image, cross-store
+item and media 404s, publication independent of `index_state`, and frozen-query rank
+parity. Parity is asserted both structurally (identical item order, prices, categories
+and per-item vectors) and by comparing the repository-backed and JSON-backed services
+over every frozen query and control; the same comparison was also run manually with the
+pinned CLIP runtime (34 query/limit combinations, zero mismatches).
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -63,10 +80,16 @@ overlap. Explicit service price/category filters work; natural-language price pa
 and customer filters are now available in P1's separate pitch mode. Fixture source
 records are synthetic, resolvable observations; catalog-owned public snapshots assert
 no stock.
-The registry holds only stores and hostnames; items, images, embeddings and telemetry
-are still JSON/JSONL, so a store created by the CLI has no catalog and no storefront
-until S3. The registry uses one SQLite file in WAL mode with thread-local connections
-and no schema-level cross-store child rows yet (S3/S9).
+The catalog and media metadata now live in the same SQLite file as the registry, with
+composite store-scoped keys; telemetry is still JSONL and embeddings still live only in
+the committed CLIP index file. Search binds that index to the imported catalog version
+and looks vectors up by item ID; per-item `image_sha256` staleness binding is S4, so a
+changed image with an unchanged item ID would not yet be detected by search. Only the
+demo store is provisioned with a catalog in the composition, and a resolved store
+without one gets 404 rather than another store's catalog (S9 hardens this with a second
+real store). `stores.catalog_path` remains as an unused S2 column because SQLite has no
+idempotent `DROP COLUMN`; no code reads or writes it. Served media is a local
+content-addressed filesystem store; backup, restore and media synchronisation are S10.
 Funnel reporting covers persisted local demo traffic only; public-telemetry retention,
 access and notice decisions remain unresolved.
 
@@ -89,16 +112,19 @@ record the architecture; `docs/SLICES.md` records the implementation sequence an
 acceptance criteria. S1 and S2 are implemented: the photographic storefront is served
 by the Flask/Waitress adapter in `apps/web/wsgi.py` with hostname-resolved store
 configuration from the SQLite registry, preserving the standard-library adapter's
-behavior and tests. S3-S10 are not implemented yet.
+behavior and tests. S3 is implemented: the store-scoped mutable catalog, listing state,
+content-addressed media and idempotent demo import replace the runtime JSON catalog.
+S4-S10 are not implemented yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S3 in `docs/SLICES.md`: replace the immutable JSON catalog with a store-scoped mutable
-repository and content-addressed image store, and import the demo dataset. Execute only
-S3; its acceptance criteria and non-goals are in the slice register, and the escalation
-rules in AGENTS apply. Do not pull later slices forward.
+S4 in `docs/SLICES.md`: move embeddings into the database per item, add the
+single-purpose indexer and the index-state machine, and make search coverage honest
+without changing ranking. Execute only S4; its acceptance criteria and non-goals are in
+the slice register, and the escalation rules in AGENTS apply. Do not pull later slices
+forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

@@ -112,7 +112,6 @@ class Store:
     timezone: str
     is_demo: bool
     presentation: StorePresentation
-    catalog_path: str | None = None
     created_at: str | None = None
 
     @property

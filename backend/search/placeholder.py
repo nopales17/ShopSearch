@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from uuid import uuid4
 
-from backend.catalog.repository import LoadedCatalog
+from backend.catalog.read_model import LoadedCatalog
 from contracts.search import SearchQuery, SearchResponse, SearchResult
 
 

@@ -25,6 +25,7 @@ class PitchHttpTest(unittest.TestCase):
             telemetry_path=self.log,
             encoder=StubEncoder(),
             database_path=Path(self.directory.name) / "store.sqlite3",
+            media_root=Path(self.directory.name) / "media",
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

@@ -1,17 +1,18 @@
-"""Image-only CLIP index with deterministic price eligibility and cosine ranking."""
+"""Cosine ranking over stored image vectors with deterministic price eligibility.
+
+The vector source supplies embeddings by item ID (ADR-0004); ranking, price
+semantics and the bounded semantic candidate set for price sorts are unchanged.
+"""
 
 from __future__ import annotations
 
-import json
-import math
 from decimal import Decimal
-from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from backend.adapters.clip import MODEL_ID, MODEL_REVISION
-from backend.catalog.repository import LoadedCatalog
+from backend.catalog.read_model import LoadedCatalog
 from backend.search.price import parse_price
+from backend.search.vector_source import VectorSource
 from contracts.search import SearchQuery, SearchResponse, SearchResult
 
 
@@ -20,22 +21,14 @@ class TextEncoder(Protocol):
 
 
 class MultimodalSearchService:
-    def __init__(self, catalog: LoadedCatalog, index_path: Path, encoder: TextEncoder) -> None:
-        index = json.loads(index_path.read_text())
-        if (
-            index["catalog_version"] != catalog.version
-            or index["model_revision"] != MODEL_REVISION
-            or index["model_id"] != MODEL_ID
-        ):
-            raise ValueError("image index is stale or belongs to another model/catalog; rebuild it")
-        if index["item_ids"] != [item.item_id for item in catalog.items]:
-            raise ValueError("index item identity mismatch")
+    def __init__(
+        self, catalog: LoadedCatalog, vector_source: VectorSource, encoder: TextEncoder
+    ) -> None:
         self.catalog, self.encoder = catalog, encoder
-        self.vectors = index["vectors"]
-        if len(self.vectors) != len(catalog.items) or any(len(v) != 512 for v in self.vectors):
-            raise ValueError("invalid CLIP index dimensions")
-        if any(not math.isfinite(x) for vector in self.vectors for x in vector):
-            raise ValueError("non-finite embedding")
+        # Every item search may return needs a vector; a missing one is a source error.
+        self.vectors = {
+            item.item_id: vector_source.vector_for(item.item_id) for item in catalog.items
+        }
 
     def search(self, query: SearchQuery) -> SearchResponse:
         if query.image_uri is not None or not 1 <= query.limit <= 100:
@@ -46,7 +39,8 @@ class MultimodalSearchService:
         # Prices/categories never influence embeddings or become inventory truth.
         vector = self.encoder.text(parsed.visual) if parsed.visual else None
         scored = []
-        for item, image in zip(self.catalog.items, self.vectors, strict=True):
+        for item in self.catalog.items:
+            image = self.vectors[item.item_id]
             if not parsed.accepts(item.price) or (
                 query.category and item.category != query.category
             ):

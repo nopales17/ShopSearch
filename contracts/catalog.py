@@ -22,6 +22,32 @@ class AvailabilityKind(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class ListingState(str, Enum):
+    """Merchant assertion about a listing, never an inventory-truth inference."""
+
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    HIDDEN = "hidden"
+    SOLD = "sold"
+
+
+class IndexState(str, Enum):
+    """Derived semantic-index state; never gates publication (ADR-0005 §5)."""
+
+    PENDING = "pending"
+    READY = "ready"
+    FAILED = "failed"
+    STALE = "stale"
+
+
+class CaptureTimeSource(str, Enum):
+    """Where a photo capture time came from. Import/upload time is never a source."""
+
+    UNKNOWN = "unknown"
+    EXIF = "exif"
+    MERCHANT_ATTESTATION = "merchant_attestation"
+
+
 @dataclass(frozen=True)
 class EvidenceRef:
     source_type: ObservationSource
@@ -69,3 +95,26 @@ class AvailabilityState:
     as_of: datetime
     supported_by: tuple[EvidenceRef, ...] = ()
     note: str | None = None
+
+
+@dataclass(frozen=True)
+class CatalogImageRecord:
+    """Store-scoped metadata for one stored image variant.
+
+    `sha256` addresses the stored bytes for `variant` (content-addressed, ADR-0004);
+    `source_sha256` records the reviewed source bytes the derivative came from.
+    Capture time is only ever sourced from image metadata or merchant attestation.
+    """
+
+    image_id: str
+    item_id: str
+    variant: str
+    sha256: str
+    source_sha256: str
+    media_type: str
+    width: int
+    height: int
+    byte_size: int
+    capture_time: datetime | None
+    capture_time_source: CaptureTimeSource
+    created_at: datetime

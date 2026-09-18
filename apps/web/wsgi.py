@@ -21,16 +21,10 @@ from typing import Any, Mapping
 import waitress
 from flask import Flask, Response, request
 
-from apps.web.pitch_server import PitchApplication, build_pitch_application
-from backend.platform.paths import (
-    DEFAULT_DATABASE_PATH,
-    DEFAULT_DEMO_STORE_PATH,
-    DEFAULT_DEVELOPMENT_HOSTS_PATH,
-)
+from apps.web.pitch_server import PitchApplication, build_pitch_application, open_demo_stack
+from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
 from backend.search.multimodal import TextEncoder
-from backend.stores.repository import StoreRepository
 from backend.stores.resolver import HostResolver, load_development_hosts
-from backend.stores.seed import seed_store
 from contracts.store import StoreScope
 
 
@@ -148,6 +142,8 @@ def create_pitch_app(
     encoder: TextEncoder | None = None,
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
+    media_root: Path | None = None,
+    storefronts: Mapping[str, Path] | None = None,
 ) -> Flask:
     """Return the Flask application serving host-resolved storefronts.
 
@@ -155,26 +151,43 @@ def create_pitch_app(
     exactly one store. An unregistered hostname returns 404 with no store data.
     `config/development_hosts.json` is the explicit local host-to-store map; it
     contains no wildcard, and an unknown host never falls back to a store.
+
+    `storefronts` maps each provisioned store to its vector index; by default only
+    the bootstrapped demo store is served. A resolved store that is not provisioned
+    gets a 404 rather than another store's catalog.
     """
 
-    repository = StoreRepository.open(database_path or DEFAULT_DATABASE_PATH)
-    seed_store(repository, DEFAULT_DEMO_STORE_PATH)
+    stack = open_demo_stack(database_path, media_root)
     development_hosts = load_development_hosts(
         DEFAULT_DEVELOPMENT_HOSTS_PATH if development_hosts_path is None else development_hosts_path
     )
-    resolver = HostResolver(repository, development_hosts)
+    resolver = HostResolver(stack.store_repository, development_hosts)
+    index_paths = (
+        {stack.store.store_id: stack.index_path} if storefronts is None else dict(storefronts)
+    )
     applications: dict[str, PitchApplication] = {}
     application_lock = threading.Lock()
 
     def application_for(scope: StoreScope) -> PitchApplication | None:
+        index_path = index_paths.get(scope.store_id)
+        if index_path is None:
+            return None
         with application_lock:
             existing = applications.get(scope.store_id)
             if existing is not None:
                 return existing
-            store = repository.find_store(scope)
-            if store is None or store.catalog_path is None:
+            store = stack.store_repository.find_store(scope)
+            if store is None or not stack.catalog_repository.has_items(scope):
                 return None
-            application = build_pitch_application(store, telemetry_path, encoder)
+            application = build_pitch_application(
+                store,
+                scope,
+                stack.catalog_repository,
+                stack.image_store,
+                index_path,
+                telemetry_path,
+                encoder,
+            )
             applications[scope.store_id] = application
             return application
 
@@ -240,11 +253,20 @@ def create_pitch_server(
     host: str = "127.0.0.1",
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
+    media_root: Path | None = None,
+    storefronts: Mapping[str, Path] | None = None,
 ) -> WaitressServer:
     """Return a bound Waitress server for the pitch application."""
 
     return WaitressServer(
-        create_pitch_app(telemetry_path, encoder, database_path, development_hosts_path),
+        create_pitch_app(
+            telemetry_path,
+            encoder,
+            database_path,
+            development_hosts_path,
+            media_root,
+            storefronts,
+        ),
         host=host,
         port=port,
     )

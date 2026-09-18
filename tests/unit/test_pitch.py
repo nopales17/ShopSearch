@@ -8,9 +8,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from apps.web.server import ROOT
+from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.catalog.pitch import load_pitch_catalog
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
+from backend.search.vector_source import CommittedIndexVectorSource
 from backend.stores.demo import demo_store_configuration
 from contracts.search import SearchQuery
 
@@ -20,6 +22,17 @@ class StubEncoder:
 
     def text(self, text: str) -> tuple[float, ...]:
         return (1.0,) + (0.0,) * 511
+
+
+def pitch_vector_source(catalog) -> CommittedIndexVectorSource:
+    """Compatibility source over the committed index, keyed by item ID."""
+
+    return CommittedIndexVectorSource(
+        ROOT / "data/pitch/image_index.json",
+        expected_catalog_version=catalog.version,
+        expected_model_id=MODEL_ID,
+        expected_model_revision=MODEL_REVISION,
+    )
 
 
 class PitchBoundaryTest(unittest.TestCase):
@@ -64,9 +77,7 @@ class PitchBoundaryTest(unittest.TestCase):
 
     def test_search_enforces_constraints_and_does_not_use_tags(self) -> None:
         catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
-        service = MultimodalSearchService(
-            catalog, ROOT / "data/pitch/image_index.json", StubEncoder()
-        )
+        service = MultimodalSearchService(catalog, pitch_vector_source(catalog), StubEncoder())
         query = SearchQuery(text="under $50", limit=100)
         before = service.search(query)
         self.assertTrue(before.results)
@@ -81,12 +92,43 @@ class PitchBoundaryTest(unittest.TestCase):
             item.title = "changed label"
         self.assertEqual(before.results, service.search(query).results)
 
-    def test_stale_index_is_rejected(self) -> None:
+    def test_stale_or_mismatched_index_is_rejected(self) -> None:
         catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
+        original = json.loads((ROOT / "data/pitch/image_index.json").read_text())
         with tempfile.TemporaryDirectory() as directory:
-            index = json.loads((ROOT / "data/pitch/image_index.json").read_text())
-            index["catalog_version"] = "wrong"
+            path = Path(directory) / "index.json"
+            changes = [
+                {"catalog_version": "wrong"},
+                {"model_revision": "wrong"},
+                {"item_ids": original["item_ids"][:-1]},
+                {"vectors": original["vectors"][:-1]},
+            ]
+            for change in changes:
+                index = dict(original)
+                index.update(change)
+                path.write_text(json.dumps(index))
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    CommittedIndexVectorSource(
+                        path,
+                        expected_catalog_version=catalog.version,
+                        expected_model_id=MODEL_ID,
+                        expected_model_revision=MODEL_REVISION,
+                    )
+
+    def test_index_missing_a_catalog_item_is_rejected_by_the_service(self) -> None:
+        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
+        original = json.loads((ROOT / "data/pitch/image_index.json").read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            index = dict(original)
+            index["item_ids"] = original["item_ids"][:-1]
+            index["vectors"] = original["vectors"][:-1]
             path = Path(directory) / "index.json"
             path.write_text(json.dumps(index))
+            source = CommittedIndexVectorSource(
+                path,
+                expected_catalog_version=catalog.version,
+                expected_model_id=MODEL_ID,
+                expected_model_revision=MODEL_REVISION,
+            )
             with self.assertRaises(ValueError):
-                MultimodalSearchService(catalog, path, StubEncoder())
+                MultimodalSearchService(catalog, source, StubEncoder())

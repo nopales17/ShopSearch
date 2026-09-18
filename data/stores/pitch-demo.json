@@ -4,7 +4,6 @@
   "currency": "USD",
   "timezone": "America/Los_Angeles",
   "is_demo": true,
-  "catalog_path": "data/pitch/catalog.json",
   "domains": [
     "form-and-field.example"
   ],

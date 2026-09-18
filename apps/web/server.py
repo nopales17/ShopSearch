@@ -11,7 +11,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 from uuid import UUID, uuid4
 
-from backend.catalog.repository import LoadedCatalog, load_fixture_catalog
+from backend.catalog.read_model import LoadedCatalog
+from backend.catalog.repository import load_fixture_catalog
 from backend.search.placeholder import PlaceholderSearchService
 from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
 from contracts.catalog import CatalogItem

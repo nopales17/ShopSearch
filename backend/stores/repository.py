@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import threading
 from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
@@ -39,23 +38,13 @@ class StoreRepository:
 
     @classmethod
     def open(cls, database_path: Path | str) -> "StoreRepository":
-        repository = cls(database_path)
-        platform_db.apply_migrations(repository._connection())
-        return repository
+        return cls(platform_db.Database.open(database_path))
 
-    def __init__(self, database_path: Path | str) -> None:
-        self._database_path = str(database_path)
-        self._local = threading.local()
-        self._connections: list[sqlite3.Connection] = []
-        self._connections_lock = threading.Lock()
+    def __init__(self, database: platform_db.Database) -> None:
+        self._database = database
 
     def close(self) -> None:
-        with self._connections_lock:
-            connections, self._connections = self._connections, []
-        for connection in connections:
-            connection.close()
-        if getattr(self._local, "connection", None) is not None:
-            self._local.connection = None
+        self._database.close()
 
     def __enter__(self) -> "StoreRepository":
         return self
@@ -76,8 +65,8 @@ class StoreRepository:
                     """
                     INSERT INTO stores (
                         store_id, display_name, currency, timezone, is_demo,
-                        catalog_path, presentation_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        presentation_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         store.store_id,
@@ -85,7 +74,6 @@ class StoreRepository:
                         store.currency,
                         store.timezone,
                         int(store.is_demo),
-                        store.catalog_path,
                         json.dumps(asdict(store.presentation), sort_keys=True),
                         store.created_at or now,
                     ),
@@ -161,14 +149,7 @@ class StoreRepository:
         return tuple(self._store(row) for row in rows)
 
     def _connection(self) -> sqlite3.Connection:
-        connection = getattr(self._local, "connection", None)
-        if connection is None:
-            connection = platform_db.connect(self._database_path)
-            platform_db.apply_migrations(connection)
-            self._local.connection = connection
-            with self._connections_lock:
-                self._connections.append(connection)
-        return connection
+        return self._database.connection()
 
     def _store(self, row: sqlite3.Row) -> Store:
         store = Store(
@@ -178,7 +159,6 @@ class StoreRepository:
             timezone=row["timezone"],
             is_demo=bool(row["is_demo"]),
             presentation=presentation_from_mapping(json.loads(row["presentation_json"])),
-            catalog_path=row["catalog_path"],
             created_at=row["created_at"],
         )
         validate_store(store)

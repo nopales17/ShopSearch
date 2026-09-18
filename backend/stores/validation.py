@@ -56,14 +56,6 @@ def validate_store(store: Store) -> None:
         ZoneInfo(store.timezone)
     except (ZoneInfoNotFoundError, ValueError) as error:
         raise StoreValidationError("timezone must be a valid IANA timezone") from error
-    if store.catalog_path is not None and (
-        not isinstance(store.catalog_path, str)
-        or not store.catalog_path
-        or store.catalog_path.startswith("/")
-        or ".." in store.catalog_path.split("/")
-    ):
-        raise StoreValidationError("catalog_path must be a repository-relative path")
-
     presentation = store.presentation
     for name in _REQUIRED_TEXT_FIELDS:
         value = getattr(presentation, name)

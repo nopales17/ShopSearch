@@ -38,6 +38,7 @@ class HostResolutionHttpTest(unittest.TestCase):
             encoder=StubEncoder(),
             database_path=database_path,
             development_hosts_path=development_hosts,
+            media_root=root / "media",
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

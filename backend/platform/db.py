@@ -8,6 +8,7 @@ bookkeeping. It contains no store-specific SQL.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,3 +75,42 @@ def applied_versions(connection: sqlite3.Connection) -> tuple[str, ...]:
 
     rows = connection.execute("SELECT version FROM schema_migrations ORDER BY rowid").fetchall()
     return tuple(row["version"] for row in rows)
+
+
+class Database:
+    """One SQLite file with thread-local connections and migrations applied.
+
+    Waitress serves requests on multiple threads and SQLite connections are not
+    shareable across threads, so each thread gets its own migrated connection for
+    the life of the database object.
+    """
+
+    @classmethod
+    def open(cls, database_path: Path | str) -> "Database":
+        database = cls(database_path)
+        apply_migrations(database.connection())
+        return database
+
+    def __init__(self, database_path: Path | str) -> None:
+        self._database_path = str(database_path)
+        self._local = threading.local()
+        self._connections: list[sqlite3.Connection] = []
+        self._connections_lock = threading.Lock()
+
+    def connection(self) -> sqlite3.Connection:
+        connection = getattr(self._local, "connection", None)
+        if connection is None:
+            connection = connect(self._database_path)
+            apply_migrations(connection)
+            self._local.connection = connection
+            with self._connections_lock:
+                self._connections.append(connection)
+        return connection
+
+    def close(self) -> None:
+        with self._connections_lock:
+            connections, self._connections = self._connections, []
+        for connection in connections:
+            connection.close()
+        if getattr(self._local, "connection", None) is not None:
+            self._local.connection = None
