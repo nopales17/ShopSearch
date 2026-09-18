@@ -174,8 +174,14 @@ item detail were manually checked. The documented `make serve` target was smoke-
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
 runs the same checks on Python 3.11/3.12; the S4 commit c37985f passed both the 3.11
 and 3.12 jobs, the S5 commit 30e0cb6 passed both as well, and the S6 commit 2f70437
-passed both. The S7 commit 2dc6db0 also passed both jobs (earlier results are in the
-GitHub Actions history).
+passed both. The S7 commit 2dc6db0 also passed both jobs, as did the S8 commit 357c60a
+(earlier results are in the GitHub Actions history). The S8 smoke was run locally with
+the pinned CLIP runtime over the WSGI test client against a live store:
+publish (item+1/image+1/event+1/generation+1), browsable with `excluded_unindexed=1`
+before indexing, price known→unknown→known changing bounded results, hide/unhide and
+sold/relist each removing and restoring every customer surface with media retained,
+one indexer run reaching `ready`, image replacement (event+1/generation+1, media still
+served, old vector excluded) and a second indexer run rebinding the new image.
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
