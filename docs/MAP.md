@@ -32,7 +32,9 @@ shopsearch/
 │   ├── telemetry.py          immutable event contract, traffic classes, sink protocol
 │   └── decision.py           future evidence-aware recommendation contract
 ├── backend/
-│   ├── platform/             persistence layer: connection factory, migrations, paths
+│   ├── platform/             persistence layer: connection factory, migrations, paths, health, logs
+│   ├── runtime/              typed SHOPSEARCH_* environment configuration boundary
+│   ├── ops/                  operator backup/restore commands + snapshot layout
 │   ├── domain/               pure domain logic
 │   ├── auth/                 merchant credentials, store-scoped sessions, founder CLI
 │   ├── catalog/              catalog repository/read model, demo import, merchant publication
@@ -40,38 +42,42 @@ shopsearch/
 │   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
 │   ├── search/               ranking + price parser; embedding source/cache; indexer + CLI
 │   ├── ingestion/            ingestion adapters
-│   ├── telemetry/            store-scoped SQLite sink, JSONL import, read-only reports
+│   ├── telemetry/            store-scoped SQLite sink, historical JSONL import, read-only reports
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             local pinned CLIP encoder/model download
 ├── apps/
-│   └── web/                  Flask/Waitress + legacy stdlib HTTP; storefront + merchant shell
+│   └── web/                  Flask/Waitress runtime, storefront, merchant shell, explicit demo
 ├── data/
-│   ├── demo/                 explicitly non-production fixture catalog + store config
+│   ├── demo/                 historical Issue #1 fixture records (no shipping code loads them)
 │   ├── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
 │   └── stores/               founder-authored store records (demo store seed)
 ├── tools/                    photo preparation, expansion, image-index build and demo catalog import
+├── deploy/                   provider-neutral Caddy template, systemd units, env example
 ├── experiments/
 │   ├── search_v0/            frozen P1 + separate expanded proxy rubric, evaluators/results/protocols
 │   └── vision_v0/            future disposable ingestion experiments
 └── tests/
-    ├── acceptance/           fixture and pitch HTTP/telemetry journeys
+    ├── acceptance/           platform HTTP, telemetry, isolation, operations journeys
+    ├── support/              shared test fixtures (never collected as tests)
     ├── unit/                 validation, typed search and persistence checks
     └── README.md             test strategy and commands
 ```
 
-`backend/catalog/repository.py` validates fixture records; `pitch.py` validates the
-separate permitted photo dataset and provenance against the resolved store.
-`backend/search/placeholder.py`
-retains Issue #1 token ranking. `multimodal.py` ranks precomputed image vectors using
+`backend/catalog/pitch.py` validates the permitted photo dataset and provenance against
+the resolved store. `backend/search/multimodal.py` ranks precomputed image vectors using
 the local CLIP adapter; `price.py` enforces supported price phrases independently.
-`backend/telemetry/jsonl_store.py` preserves correlated append-only events for the retired
-Issue #1 fixture slice. `apps/web/wsgi.py` is the production HTTP adapter: it
-resolves the request Host, serves the photographic demo through a Flask application
-under Waitress and reuses the P1 composition. `pitch_server.py` retains that composition
-and the superseded stdlib entry point; `pitch_views.py` and static pitch CSS/JS provide
-the UI. `data/local/` holds ignored model weights, preparation files, logs and
-content-addressed media derivatives. No dataset represents Customer Zero inventory.
-ADR-0003 explains the pitch extension; ADR-0004 selects the WSGI runtime.
+`apps/web/storefront.py` owns the storefront application and the generic/demo stack
+openers; `apps/web/wsgi.py` is the production HTTP adapter (Flask under Waitress) whose
+`main()` reads `SHOPSEARCH_*` configuration and never provisions a store;
+`apps/web/demo.py` is the explicit developer/demo command; `apps/web/pitch_server.py`
+retains the S1 stdlib adapter for parity comparison only; `pitch_views.py` and static
+pitch CSS/JS provide the UI. `backend/runtime/config.py` is the typed configuration
+boundary, `backend/platform/health.py` and `backend/platform/operational_log.py` own
+health and structured operational logging, and `backend/ops/` owns the backup/restore
+commands. `data/local/` holds ignored model weights, preparation files, logs and
+content-addressed media derivatives. `data/demo/` remains as Issue #1 history and is no
+longer loaded by shipping code. No dataset represents Customer Zero inventory.
+ADR-0002 is historical (S10 retired its runtime); ADR-0004 selects the WSGI runtime.
 
 `backend/platform/db.py` owns SQLite connections (WAL, `foreign_keys`), the versioned
 forward-only migration runner and migration bookkeeping in
@@ -207,6 +213,27 @@ rejects cross-store child rows. The persistence import boundary in
 `tests/unit/test_store_registry.py` keeps `sqlite3` and the raw connection factory inside
 the repository layer. Nothing here is provisioned by the production composition: the two
 fixture stores and the unprovisioned host exist only in tests.
+
+S10 makes the runtime hostable and recoverable and retires the Issue #1 fixture runtime.
+`backend/runtime/config.py` is the typed `SHOPSEARCH_*` configuration boundary
+(database, media root, explicit store allowlist, bind host/port, log level, backup root,
+optional development host map) and fails closed. `apps/web/storefront.py` separates
+`open_platform_stack()` (no provisioning) from `open_demo_stack()` (explicit Form & Field
+provisioning); `apps/web/wsgi.py` serves only the configured stores with `/health` at the
+runtime boundary; `apps/web/demo.py` is the explicit demo command.
+`backend/platform/health.py` checks the database through the repository and the media
+root through the media adapter; `backend/platform/operational_log.py` writes structured
+JSON operational logs that never carry secrets and are distinct from telemetry.
+`backend/ops/runtime_backup.py` takes a consistent SQLite snapshot with the online backup
+API (the primitive lives in `backend/platform/db.py`), mirrors the content-addressed
+media tree and verifies every image row in the snapshot; `backend/ops/runtime_restore.py`
+restores onto a clean destination, refuses to overwrite without an explicit destructive
+flag and verifies media references. `deploy/` holds the provider-neutral Caddy template,
+the systemd service plus nightly backup timer, and an environment-file example;
+`docs/OPERATIONS.md` is the operator guide with the executed local drill. Removed:
+`apps/web/server.py`, `backend/catalog/repository.py`, `backend/search/placeholder.py`
+and `backend/telemetry/jsonl_store.py`. `apps/web/pitch_server.py` now holds only the S1
+stdlib adapter, retained for the byte-parity test.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

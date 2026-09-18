@@ -1,13 +1,13 @@
 PYTHON ?= python3
-.PHONY: run serve pitch pitch-setup pitch-eval report test check
-
-run:
-	$(PYTHON) -m apps.web.server
+.PHONY: serve demo pitch pitch-setup pitch-eval report backup restore test check
 
 serve:
 	$(PYTHON) -m apps.web.wsgi
 
-pitch: serve
+demo:
+	$(PYTHON) -m apps.web.demo
+
+pitch: demo
 
 pitch-setup:
 	$(PYTHON) -m pip install -r requirements.txt
@@ -19,6 +19,12 @@ pitch-eval:
 
 report:
 	$(PYTHON) -m backend.telemetry.report
+
+backup:
+	$(PYTHON) -m backend.ops.runtime_backup
+
+restore:
+	$(PYTHON) -m backend.ops.runtime_restore
 
 test:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v

@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
+from apps.web.storefront import open_demo_stack
 from apps.web.wsgi import create_pitch_server
 from backend.platform.paths import DEFAULT_DEMO_STORE_PATH
 from backend.stores.repository import StoreRepository
@@ -32,12 +33,13 @@ class HostResolutionHttpTest(unittest.TestCase):
         with StoreRepository.open(database_path) as repository:
             store = seed_store(repository, DEFAULT_DEMO_STORE_PATH)
             repository.add_domain(store.scope, "shop.example.com")
+        self.stack = open_demo_stack(database_path, root / "media")
         self.server = create_pitch_server(
             port=0,
             encoder=StubEncoder(),
-            database_path=database_path,
+            stack=self.stack,
             development_hosts_path=development_hosts,
-            media_root=root / "media",
+            storefronts={self.stack.demo_store.store_id},
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -89,7 +91,15 @@ class HostResolutionHttpTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(body, b"ok")
 
-    def test_unknown_host_without_a_store_never_resolves(self) -> None:
+    def test_health_is_host_independent_and_store_routes_still_404(self) -> None:
+        # S10 answers /health at the runtime boundary, before hostname resolution, so
+        # an operator can tell a database/media failure from a bad Host header.
         status, _, body = self.fetch("/health", "localhost:1234")
-        self.assertEqual(status, 404)
-        self.assertEqual(body, b"Not found")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"ok")
+        # Every store-scoped route still refuses an unregistered hostname.
+        for path in ("/", "/catalog", "/items/pitch-128096"):
+            with self.subTest(path=path):
+                status, _, body = self.fetch(path, "localhost:1234")
+                self.assertEqual(status, 404)
+                self.assertEqual(body, b"Not found")

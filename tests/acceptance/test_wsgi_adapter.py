@@ -10,6 +10,7 @@ from urllib.request import HTTPCookieProcessor, build_opener
 from uuid import UUID
 
 from apps.web.pitch_server import create_pitch_server as create_legacy_server
+from apps.web.storefront import open_demo_stack
 from apps.web.wsgi import create_pitch_server
 from tests.unit.test_pitch import StubEncoder
 
@@ -69,11 +70,13 @@ def fetch(url: str, client=None):
 class WsgiRouteContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
+        root = Path(self.directory.name)
+        self.stack = open_demo_stack(root / "store.sqlite3", root / "media")
         self.server = create_pitch_server(
             port=0,
             encoder=StubEncoder(),
-            database_path=Path(self.directory.name) / "store.sqlite3",
-            media_root=Path(self.directory.name) / "media",
+            stack=self.stack,
+            storefronts={self.stack.demo_store.store_id},
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -133,11 +136,12 @@ class LegacyParityTest(unittest.TestCase):
             database_path=root / "legacy-store.sqlite3",
             media_root=root / "legacy-media",
         )
+        self.wsgi_stack = open_demo_stack(root / "wsgi-store.sqlite3", root / "wsgi-media")
         self.wsgi = create_pitch_server(
             port=0,
             encoder=StubEncoder(),
-            database_path=root / "wsgi-store.sqlite3",
-            media_root=root / "wsgi-media",
+            stack=self.wsgi_stack,
+            storefronts={self.wsgi_stack.demo_store.store_id},
         )
         self.legacy_thread = threading.Thread(target=self.legacy.serve_forever, daemon=True)
         self.wsgi_thread = threading.Thread(target=self.wsgi.serve_forever, daemon=True)

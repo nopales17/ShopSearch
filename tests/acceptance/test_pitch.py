@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import HTTPCookieProcessor, build_opener
 
+from apps.web.storefront import open_demo_stack
 from apps.web.wsgi import create_pitch_server
 from backend.stores.repository import StoreRepository
 from backend.telemetry.report import summarize
@@ -22,11 +23,15 @@ class PitchHttpTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.database_path = Path(self.directory.name) / "store.sqlite3"
+        self.media_root = Path(self.directory.name) / "media"
+        # The pitch demo is provisioned explicitly; production startup never seeds it.
+        self.stack = open_demo_stack(self.database_path, self.media_root)
+        self.demo_store_id = self.stack.demo_store.store_id
         self.server = create_pitch_server(
             port=0,
             encoder=StubEncoder(),
-            database_path=self.database_path,
-            media_root=Path(self.directory.name) / "media",
+            stack=self.stack,
+            storefronts={self.demo_store_id},
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

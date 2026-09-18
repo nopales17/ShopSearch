@@ -20,6 +20,7 @@ import struct
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
 
@@ -530,6 +531,34 @@ class CatalogRepository:
             .fetchone()
         )
         return row is not None
+
+    def image_addresses(self, scope: StoreScope) -> tuple[tuple[str, str], ...]:
+        """Every stored image address in this store, in any listing state.
+
+        Used by the operator backup verification: a snapshot is only complete when
+        every one of these addresses resolves to bytes in the backup.
+        """
+
+        rows = (
+            self._database.connection()
+            .execute(
+                "SELECT DISTINCT sha256, variant FROM images WHERE store_id = ? "
+                "ORDER BY sha256, variant",
+                (scope.store_id,),
+            )
+            .fetchall()
+        )
+        return tuple((str(row["sha256"]), str(row["variant"])) for row in rows)
+
+    def check_health(self) -> None:
+        """Raise when the catalog database cannot serve a trivial read."""
+
+        self._database.check_health()
+
+    def backup_database_to(self, destination: Any) -> None:
+        """Write a consistent SQLite snapshot through the persistence boundary."""
+
+        self._database.backup_to(destination)
 
     def image_by_address(
         self, scope: StoreScope, sha256: str, variant: str
@@ -1403,6 +1432,38 @@ class CatalogRepository:
             )
             .fetchall()
         )
+
+
+@dataclass(frozen=True)
+class SnapshotManifest:
+    """What a database snapshot contains, read without mutating the snapshot file."""
+
+    store_ids: tuple[str, ...]
+    image_addresses: tuple[tuple[str, str, str], ...]
+
+
+def read_snapshot_manifest(database_path: Any) -> SnapshotManifest:
+    """Read store IDs and image addresses from a snapshot with a read-only connection.
+
+    Used by the operator backup/restore verification. The connection is read-only so
+    verification never rewrites the snapshot it is checking.
+    """
+
+    connection = sqlite3.connect(f"file:{Path(database_path)}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    try:
+        stores = connection.execute("SELECT store_id FROM stores ORDER BY store_id").fetchall()
+        images = connection.execute(
+            "SELECT store_id, sha256, variant FROM images ORDER BY store_id, sha256, variant"
+        ).fetchall()
+    finally:
+        connection.close()
+    return SnapshotManifest(
+        store_ids=tuple(str(row["store_id"]) for row in stores),
+        image_addresses=tuple(
+            (str(row["store_id"]), str(row["sha256"]), str(row["variant"])) for row in images
+        ),
+    )
 
 
 def _image_record(row: sqlite3.Row) -> CatalogImageRecord:

@@ -14,6 +14,7 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from apps.web.wsgi import create_pitch_app, create_pitch_server
+from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.auth.repository import MerchantRepository
 from backend.auth.service import (
     LOGIN_CSRF_COOKIE,
@@ -25,7 +26,12 @@ from backend.catalog.pitch_import import import_pitch_dataset
 from backend.catalog.store_repository import CatalogRepository
 from backend.media.image_store import LocalImageStore
 from backend.platform import db as platform_db
-from backend.platform.paths import DEFAULT_DEMO_DATASET_PATH, DEFAULT_DEMO_STORE_PATH
+from backend.platform.paths import (
+    DEFAULT_DEMO_DATASET_PATH,
+    DEFAULT_DEMO_INDEX_PATH,
+    DEFAULT_DEMO_STORE_PATH,
+)
+from backend.search.embedding_import import import_pitch_embeddings
 from backend.stores.config import load_store_config_in_memory
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
@@ -68,6 +74,15 @@ class MerchantShellTest(unittest.TestCase):
         with CatalogRepository.open(self.database_path) as catalog:
             image_store = LocalImageStore(self.media_root)
             import_pitch_dataset(catalog, image_store, DEFAULT_DEMO_DATASET_PATH, self.demo)
+            # The demo's committed embeddings are an explicit import step, as in the
+            # demo provisioning path; production startup never does this.
+            import_pitch_embeddings(
+                catalog,
+                DEFAULT_DEMO_INDEX_PATH,
+                self.demo,
+                model_id=MODEL_ID,
+                model_revision=MODEL_REVISION,
+            )
             self.add_live_items(catalog)
         with AuthStores.open(self.database_path, iterations=FAST_ITERATIONS) as auth_stores:
             self.demo_auth = auth_stores.for_store(self.demo)
@@ -375,6 +390,7 @@ class MerchantShellTest(unittest.TestCase):
             database_path=self.database_path,
             media_root=self.media_root,
             development_hosts_path=Path(self.directory.name) / "development_hosts.json",
+            storefronts={self.demo.store_id},
         )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

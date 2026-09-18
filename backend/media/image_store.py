@@ -7,7 +7,9 @@ Bytes are addressed by `(store_id, sha256, variant)`. Callers receive a URL from
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import shutil
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
@@ -37,6 +39,15 @@ class ImageStore(Protocol):
     def delete(self, scope: StoreScope, sha256: str, variant: str) -> bool: ...
 
     def blob_count(self, scope: StoreScope) -> int: ...
+
+    def check_health(self) -> None:
+        """Raise when the configured media root is not a usable directory."""
+
+    def backup_to(self, destination_root: Path) -> int:
+        """Synchronise the whole content-addressed tree; return files written."""
+
+    def contains(self, scope: StoreScope, sha256: str, variant: str) -> bool:
+        """True when this store (or a backup mirror) holds the addressed bytes."""
 
 
 def media_url(scope: StoreScope, sha256: str, variant: str) -> str:
@@ -103,6 +114,41 @@ class LocalImageStore:
         if not root.exists():
             return 0
         return sum(1 for path in root.rglob("*") if path.is_file())
+
+    def check_health(self) -> None:
+        """Create the root if needed, then verify it is a readable, writable directory."""
+
+        try:
+            self._root.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise MediaError("media root is not usable") from error
+        if not self._root.is_dir():
+            raise MediaError("media root is not a directory")
+        if not os.access(self._root, os.R_OK | os.W_OK | os.X_OK):
+            raise MediaError("media root is not readable and writable")
+
+    def backup_to(self, destination_root: Path) -> int:
+        """Copy the store-scoped tree to a backup root, skipping identical files."""
+
+        destination = Path(destination_root)
+        destination.mkdir(parents=True, exist_ok=True)
+        written = 0
+        if not self._root.exists():
+            return written
+        for path in sorted(self._root.rglob("*")):
+            if not path.is_file():
+                continue
+            target = destination / path.relative_to(self._root)
+            if target.is_file() and target.stat().st_size == path.stat().st_size:
+                if target.read_bytes() == path.read_bytes():
+                    continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+            written += 1
+        return written
+
+    def contains(self, scope: StoreScope, sha256: str, variant: str) -> bool:
+        return self.exists(scope, sha256, variant)
 
     def _path(self, scope: StoreScope, sha256: str, variant: str) -> Path:
         validate_media_address(sha256, variant)

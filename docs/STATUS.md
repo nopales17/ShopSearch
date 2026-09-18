@@ -111,9 +111,37 @@ reports, and every S7/S8 mutation. A schema audit covers all nine store-scoped t
 proves with direct inserts that SQLite rejects cross-store child rows, unknown-store rows
 and a hostname claimed by two stores. No isolation defect was found, so no migration was
 added.
+S10 makes the runtime hostable and recoverable and retires the superseded Issue #1
+fixture runtime. Production startup is now generic: `backend/runtime/config.py` is one
+typed `SHOPSEARCH_*` boundary (database path, media root, explicit store-ID allowlist,
+bind host/port, log level, backup root, optional development host map) that fails closed
+with an operator error instead of falling back to the demo or to repository defaults.
+`open_platform_stack()` opens the configured database and media root, runs the
+forward-only migrations and provisions nothing; the Form & Field demo is seeded only by
+the explicit `python -m apps.web.demo` command, and `make run` plus the fixture slice
+(`apps/web/server.py`, the fixture catalog loader, placeholder search and the JSONL
+runtime store) are removed after the platform storefront passed equivalent journeys.
+`/health` now performs a real trivial read through the catalog repository and a media-root
+check through the media adapter, answering at the runtime boundary before hostname
+resolution with `200 ok` or `503 database unavailable` / `503 media unavailable` and no
+store data, paths or SQL errors. Operational logs are JSON lines on the standard logging
+stack, separate from telemetry, covering startup/shutdown, configuration, request
+method/path/status/duration/store and backup/restore outcome, and never carrying
+passwords, session cookies, CSRF tokens, bodies, uploads, header dumps or query strings.
+`backend/ops/` adds a consistent online-backup command (SQLite's backup API inside the
+persistence layer, WAL folded into a single self-contained snapshot, media tree mirrored,
+every snapshot image row verified before success) and a restore command that refuses to
+overwrite an existing destination unless the operator passes an explicit destructive
+flag and re-verifies media references afterwards. `deploy/` carries a hostname-free Caddy
+template (no wildcard or on-demand TLS), a systemd service plus a nightly backup timer,
+and an environment-file example with placeholders only; `docs/OPERATIONS.md` records the
+runtime directories, ownership, commands and the executed local restore drill. The
+pitch-demo retrieval-index artifact is now an import/parity input for the demo path only:
+a platform store no longer reads it at startup and no longer carries a fabricated
+`retrieval_index_sha256` on live events.
 
 ## Verification
-231 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+236 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -212,6 +240,29 @@ unknown-store rows and a hostname claimed by two stores are rejected at the sche
 The persistence import boundary now also fails if the raw connection factory escapes the
 repository layer, with the one repository-composition exception
 (`backend/auth/service.py`, which executes no SQL) pinned by test.
+S10 adds runtime and operations coverage: production startup serves the two-store
+isolation shape from `open_platform_stack()` with no demo store in the registry, while
+the registered demo hostname keeps returning the store-free 404; the platform runtime
+serves catalog and search with a guard that raises if `data/pitch/image_index.json` is
+read at all, and live telemetry carries no `retrieval_index_sha256` and only the store's
+own catalog version; `python -m apps.web.wsgi` exits 2 with a named-variable configuration
+error for each missing `SHOPSEARCH_DATABASE`/`SHOPSEARCH_MEDIA_ROOT`/`SHOPSEARCH_STORES`;
+`/health` returns 200 for a healthy runtime, 503 `media unavailable` for a media root
+blocked by a plain file and 503 `database unavailable` for an injected repository
+failure, with a generic body that contains no path or SQL text and no session cookie;
+operational JSON logs carry method/path/status/duration/store with no query string and no
+password, session token or CSRF value even when a real sign-in, a rejected CSRF mutation
+and an upload rejection are exercised, while telemetry stays in the database and holds no
+operational fields. The backup/restore suite proves a live WAL database snapshots into
+exactly `database.sqlite3` + `media/` with the snapshot in `delete` journal mode, that
+every backed-up image row resolves to backed-up bytes, that removing a mirrored blob
+fails the restore, that a restore into a clean directory reproduces the snapshot's item,
+image, item-event and telemetry counts exactly and serves catalog/detail/media/search
+from the restored paths alone, and that restoring over an existing database or a
+non-empty media root is refused without the explicit destructive flag. A separate restart
+test publishes an item, browses, stops every repository/server handle, reopens the same
+paths and finds the item, its media, its item event and the persisted telemetry intact.
+The executed local drill and its observed numbers are recorded in `docs/OPERATIONS.md`.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -276,8 +327,10 @@ plus a CLI, not a daemon thread: the only runtime producers of `pending` items a
 S7 publish and S8 replacement operations, and no generic job framework is introduced. Coverage
 counts and disclosure wording come from the store record, but the notice itself renders
 client-side from the search response so the server-rendered page bytes stay unchanged.
-JSONL telemetry remains only for the retired Issue #1 fixture slice; the platform
-storefront writes to the database. `data/local/pitch-telemetry.jsonl` (gitignored) is a
+The retired Issue #1 fixture slice no longer runs: its server, fixture catalog loader,
+placeholder search and JSONL runtime store are gone, and only the one-way historical
+JSONL→platform importer remains. The platform storefront writes telemetry to the
+database. `data/local/pitch-telemetry.jsonl` (gitignored) is a
 historical, incompatible local artifact: it contains pre-S4 `search_results_returned`
 events without the S4 coverage counts, so it is not migrated into the database, no
 importer bypass exists and its events are not rewritten. `stores.catalog_path` remains
@@ -290,7 +343,19 @@ process-local by design for the one-process runtime, there is no account deletio
 roles, self-service signup, or email, and `/manage` can only amend an existing item
 (title/category/price), hide/unhide it, mark it sold/relist it or replace its photo;
 bulk edits, scheduling and deletion are not implemented. Served media is a local
-content-addressed filesystem store; backup, restore and media synchronisation are S10.
+content-addressed filesystem store. S10 implements the operator backup (consistent
+SQLite snapshot plus media synchronisation and verification), the restore command and
+the nightly systemd timer definition, with the destination supplied by configuration;
+the executed local drill is recorded in `docs/OPERATIONS.md`. Deployment templates,
+health, configuration and operational logging are implemented and locally verified, but
+no hosting provider, VM, domain, DNS record, TLS certificate or off-host backup
+destination has been provisioned or configured, so nothing is deployed and no
+availability, adoption, customer-value or production-traffic claim is made. The generic
+runtime no longer reads the pitch-demo retrieval index, and live-store telemetry carries
+no fabricated `retrieval_index_sha256`; the demo path still records the artifact's real
+hash where it refers to the pitch-demo import/parity artifact. Caddy and systemd were not
+available on the development machine, so those configuration files were reviewed by hand
+but not syntax-validated locally.
 Merchant publication is bounded to 12 MiB per photo and to JPEG/PNG/WebP, so HEIC
 photos from some phones are rejected until ADR-0004 is amended; the request cap is that
 byte cap plus multipart framing. Publishing is limited to live stores: the demo store
@@ -342,20 +407,25 @@ each one atomic catalog mutation with one item event and one catalog-generation 
 with hidden and sold items keeping their media and history. S9 is implemented: a
 synthetic two-store isolation fixture and its adversarial suite prove that catalog, media,
 search, embeddings, telemetry and merchant authority fail closed across two
-simultaneously provisioned stores. S10 is not implemented yet.
+simultaneously provisioned stores. S10 is implemented: the production runtime is generic
+and environment-configured, `/health` reports real database and media reachability,
+operational logs are separate from telemetry, the operator backup/restore commands with
+a nightly systemd timer and provider-neutral deployment templates are in place with an
+executed local restore drill, and the superseded Issue #1 fixture runtime is retired with
+ADR-0002 marked historical. The S1–S10 platform transition is complete in the repository.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S10 in `docs/SLICES.md`: make the platform hostable and recoverable and retire the
-superseded fixture slice — environment-based configuration and secrets, reverse-proxy and
-service configuration, nightly backup and media synchronisation with a restore drill,
-structured operational logging distinct from telemetry, a health endpoint covering
-database and media, and removal of the legacy fixture slice only after the platform
-storefront passes equivalent journeys. Execute only S10; its acceptance criteria and
-non-goals are in the slice register, and the escalation rules in AGENTS apply. Do not pull
-later work forward.
+The S1–S10 platform transition is complete, so there is no authorized implementation
+slice to start. The next trunk task is founder-owned and external: record the prospective
+owner's stated requirements, objections, pricing discussion and permission (or refusal)
+to photograph and publish merchandise, then decide the hosting provider, domain, TLS and
+an independent off-host backup destination, and resolve public-telemetry retention,
+access and notice. Until those inputs exist, agents must not provision hosting, configure
+DNS, issue certificates, contact the owner, expand scope or claim a deployment; no further
+implementation slice is authorized by this document.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

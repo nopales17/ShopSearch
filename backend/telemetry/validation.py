@@ -1,8 +1,8 @@
-"""Shared telemetry event contract: codec, shape rules and attribution.
+"""Shared telemetry event contract: construction, codec, shape rules and attribution.
 
-S5 moves persistence to SQLite without changing the contract, so both sinks
-(`jsonl_store` for the retired Issue #1 fixture slice, `sqlite_store` for the
-platform) serialize, validate and attribute identically through this module.
+S5 moved persistence to SQLite without changing the contract, so the platform sink and
+the historical JSONL import path serialize, validate, attribute and construct events
+identically through this module.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Mapping, Sequence
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from contracts.telemetry import EventType, TelemetryEvent, TrafficClass, traffic_class
 
@@ -26,6 +26,26 @@ ATTRIBUTED_EVENT_TYPES = (
     "call_clicked",
     "directions_clicked",
 )
+
+
+def new_event(
+    event_type: EventType,
+    session_id: str,
+    store_id: str,
+    payload: dict[str, Any],
+    search_id: str | None = None,
+) -> TelemetryEvent:
+    """Build one event with a fresh ID and an explicit local offset."""
+
+    return TelemetryEvent(
+        event_id=str(uuid4()),
+        event_type=event_type,
+        occurred_at=datetime.now().astimezone(),
+        session_id=session_id,
+        store_id=store_id,
+        search_id=search_id,
+        payload=payload,
+    )
 
 
 def serialize_event(event: TelemetryEvent) -> dict[str, Any]:

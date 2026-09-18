@@ -1,0 +1,50 @@
+# ShopSearch platform runtime: one Waitress process behind Caddy (ADR-0004).
+# Install as /etc/systemd/system/shopsearch.service and adjust the two paths below
+# to the directories this host actually uses.
+[Unit]
+Description=ShopSearch storefront (Waitress)
+Documentation=file:/opt/shopsearch/docs/OPERATIONS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shopsearch
+Group=shopsearch
+WorkingDirectory=/opt/shopsearch
+EnvironmentFile=/etc/shopsearch/shopsearch.env
+ExecStart=/opt/shopsearch/.venv/bin/python -m apps.web.wsgi
+
+# Restart policy: a single-process design, so any exit is worth retrying, and the
+# startup ordering above keeps DNS/network ready before the first bind.
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+# Runtime directories: database and media live in the state directory; the operator
+# owns them and the service account only needs read/write there.
+ReadWritePaths=/var/lib/shopsearch /var/log/shopsearch
+StateDirectory=shopsearch
+LogsDirectory=shopsearch
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+SystemCallArchitectures=native
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=shopsearch
+
+[Install]
+WantedBy=multi-user.target

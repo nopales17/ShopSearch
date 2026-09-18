@@ -142,6 +142,40 @@ ADR-0004 selects the production runtime and persistence for the store-scoped pla
 embedding rows) and records them as initial implementations behind adapters, with explicit
 portability rules and revisit triggers. It supersedes ADR-0002 for production callers only.
 
+## Deployed runtime shape (S10)
+
+The production process is generic. `apps/web/wsgi.py` reads one typed configuration
+boundary (`backend/runtime/config.py`, `SHOPSEARCH_*` environment variables), opens the
+configured database and media root through the repository/media adapters, runs the
+forward-only migrations and serves only the store IDs in `SHOPSEARCH_STORES`. Startup
+never provisions or imports a store: the Form & Field pitch demo is provisioned only by
+the explicit `python -m apps.web.demo` developer/demo command. Configuration that is
+missing or invalid fails startup with an operator error instead of falling back to the
+demo or to repository defaults. There is no committed hostname, credential or secret,
+and no `SECRET_KEY`: the application has no Flask client-side session.
+
+`/health` is answered at the runtime boundary before hostname resolution. It performs a
+trivial read through the catalog repository and checks the media root through the media
+adapter, returning `200 ok`, `503 database unavailable` or `503 media unavailable` with
+a deliberately generic body, and it writes no telemetry. Health probing is operational,
+not behavioral, traffic.
+
+Operational logging is separate from behavioral telemetry: one JSON object per line via
+the standard library logging stack (`backend/platform/operational_log.py`), covering
+startup/shutdown, migration and health failure, request method/path/status/duration/
+resolved store, and backup/restore outcome. It never logs passwords, session cookies,
+CSRF tokens, request bodies, uploaded bytes, header dumps or query strings; telemetry
+stays in the store-scoped `telemetry_events` table.
+
+Recovery uses `backend/ops/`: the backup command takes a transaction-consistent snapshot
+with SQLite's online backup API inside the persistence layer, folds the WAL back into a
+single self-contained file, mirrors the content-addressed media tree, and verifies that
+every image row in the snapshot resolves to backed-up bytes. The restore command refuses
+an existing database or non-empty media root unless the operator passes the explicit
+destructive flag, and verifies media references before reporting success. A nightly
+systemd timer invokes the backup against a destination supplied by configuration; that
+destination must be on an independent failure domain for host-loss recovery.
+
 ## Model strategy
 Expensive model work should happen primarily at ingestion/index time.
 

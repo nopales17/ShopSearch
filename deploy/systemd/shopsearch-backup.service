@@ -1,0 +1,30 @@
+# Nightly consistent snapshot of the ShopSearch database and media tree.
+# The destination comes from SHOPSEARCH_BACKUP_ROOT in the environment file and must
+# be configured on an independent failure domain (an off-host synchronised mount), or
+# a host loss still destroys both copies.
+[Unit]
+Description=ShopSearch backup (SQLite online snapshot + media synchronisation)
+Documentation=file:/opt/shopsearch/docs/OPERATIONS.md
+After=shopsearch.service
+
+[Service]
+Type=oneshot
+User=shopsearch
+Group=shopsearch
+WorkingDirectory=/opt/shopsearch
+EnvironmentFile=/etc/shopsearch/shopsearch.env
+ExecStart=/opt/shopsearch/.venv/bin/python -m backend.ops.runtime_backup
+
+ReadWritePaths=/var/lib/shopsearch /var/log/shopsearch
+StateDirectory=shopsearch
+LogsDirectory=shopsearch
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=shopsearch-backup

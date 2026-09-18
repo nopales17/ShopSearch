@@ -1,7 +1,21 @@
 # ADR-0002: Standard-library local fixture runtime
 
 ## Status
-Accepted for Issue #1, 2026-09-08. No public deployment decision is implied.
+**Historical.** Accepted for Issue #1 on 2026-09-08; superseded for runtime by
+ADR-0004 (Flask/Waitress, SQLite, content-addressed media) and retired in S10. It is
+kept as the record of the Issue #1 fixture slice, not as a description of the shipped
+runtime. No public deployment decision is implied then or now.
+
+Retired in S10: `apps/web/server.py`, the fixture catalog loader
+(`backend/catalog/repository.py`), the placeholder search fixture
+(`backend/search/placeholder.py`) and the JSONL runtime store
+(`backend/telemetry/jsonl_store.py`) were removed once the platform storefront passed
+equivalent journeys (`tests/acceptance/test_pitch.py`, `test_wsgi_adapter.py`,
+`test_catalog_media.py`, `test_platform_runtime.py`,
+`test_backup_restore.py`). The committed `data/demo/` fixture records remain as Issue #1
+history; no shipping code loads them. The one-way JSONL→platform importer
+(`backend/telemetry/import_jsonl.py`) is retained for the documented historical-log
+import use case and does not require the retired runtime.
 
 ## Context
 The first caller needs a working browser → catalog → placeholder search → telemetry

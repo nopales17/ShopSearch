@@ -5,8 +5,8 @@ import unittest
 from dataclasses import replace
 
 from apps.web import pitch_views as views
-from apps.web.server import ROOT
 from backend.catalog.pitch import load_pitch_catalog
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from backend.stores.demo import load_demo_store
 from backend.stores.validation import StoreValidationError, validate_store
 from contracts.store import Store

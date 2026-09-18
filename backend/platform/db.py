@@ -117,3 +117,31 @@ class Database:
             connection.close()
         if getattr(self._local, "connection", None) is not None:
             self._local.connection = None
+
+    def backup_to(self, destination: Path | str) -> None:
+        """Write a consistent snapshot with SQLite's online backup API.
+
+        WAL mode means a plain file copy of a live database is not a snapshot; the
+        backup API reads a transaction-consistent image while the process keeps
+        running. The destination is overwritten in place and may not exist yet.
+        """
+
+        target_path = Path(destination)
+        if target_path.parent:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+        source = self.connection()
+        target = sqlite3.connect(str(target_path))
+        try:
+            source.backup(target)
+            # The copied header keeps the source's WAL mode, which would leave the
+            # snapshot's newest pages in a sidecar the operator does not copy. Fold
+            # them back into the single snapshot file and drop the WAL.
+            target.execute("PRAGMA journal_mode=delete")
+            target.commit()
+        finally:
+            target.close()
+
+    def check_health(self) -> None:
+        """Raise when this database cannot serve a trivial read."""
+
+        self.connection().execute("SELECT 1").fetchone()

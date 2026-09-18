@@ -1,0 +1,15 @@
+# Runs the backup nightly. Persistent=true means a host that was down over the
+# scheduled time still takes the snapshot once it comes back, so "the previous
+# night's backup" is as current as the host allows.
+[Unit]
+Description=Nightly ShopSearch backup
+Documentation=file:/opt/shopsearch/docs/OPERATIONS.md
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=shopsearch-backup.service
+
+[Install]
+WantedBy=timers.target

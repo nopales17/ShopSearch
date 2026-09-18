@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from apps.web.server import ROOT
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.catalog.pitch import load_pitch_catalog
 from backend.catalog.pitch_import import ImportResult, import_pitch_dataset
@@ -19,6 +18,7 @@ from backend.platform.paths import (
     DEFAULT_DEMO_INDEX_PATH,
     DEFAULT_DEMO_STORE_PATH,
 )
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from backend.search.embedding_import import EmbeddingImportResult, import_pitch_embeddings
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.vector_source import DatabaseVectorSource, VectorCache

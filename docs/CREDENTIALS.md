@@ -7,11 +7,19 @@ session is only valid on its own store's resolved hostname.
 ## Provision, disable, reset
 
 ```sh
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo create --username alice
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo list
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo disable --username alice
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo reset --username alice
+# Deployed host (paths come from /etc/shopsearch/shopsearch.env; the CLI defaults to the
+# repository-local database for development):
+.venv/bin/python -m backend.auth.cli --database /var/lib/shopsearch/shopsearch.sqlite3 \
+  --store-id live-store create --username alice
+.venv/bin/python -m backend.auth.cli --store-id live-store list
+.venv/bin/python -m backend.auth.cli --store-id live-store disable --username alice
+.venv/bin/python -m backend.auth.cli --store-id live-store reset --username alice
 ```
+
+The store must already exist in the registry: the runtime never provisions stores, and
+`--database` must point at the same file `SHOPSEARCH_DATABASE` names. No credential,
+salt, token or secret is committed to the repository; the service itself needs no
+secret to start (it has no Flask client-side session and no `SECRET_KEY`).
 
 - Passwords are read from an interactive prompt and confirmed; they are never accepted
   as command-line arguments, so they do not enter shell history.

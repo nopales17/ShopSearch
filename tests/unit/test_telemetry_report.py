@@ -9,9 +9,9 @@ from uuid import NAMESPACE_URL, uuid5
 from backend.platform.paths import DEFAULT_DEMO_STORE_PATH
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
-from backend.telemetry.jsonl_store import new_event
 from backend.telemetry.report import load_events, summarize
 from backend.telemetry.sqlite_store import TelemetryStores
+from backend.telemetry.validation import new_event
 from contracts.telemetry import EventType
 
 

@@ -9,9 +9,9 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from apps.web.server import ROOT
 from backend.platform import db as platform_db
 from backend.platform.paths import DEFAULT_DEMO_STORE_PATH
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from backend.stores import cli
 from backend.stores.config import load_store_config, load_store_config_in_memory
 from backend.stores.hostname import InvalidHostnameError, normalize_hostname

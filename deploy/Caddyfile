@@ -1,0 +1,41 @@
+# Provider-neutral Caddy template for the ADR-0004 topology:
+#   internet -> Caddy (TLS) -> loopback Waitress (ShopSearch) -> platform data
+#
+# No hostname is committed. Provide the site address from the environment, for
+# example:  SHOPSEARCH_DOMAIN=store.example.com caddy run --config deploy/Caddyfile
+#
+# TLS is automatic for the exact hostname given here. There is deliberately no
+# wildcard and no `on_demand` TLS: the application resolves storefronts through an
+# explicit hostname registry, so a wildcard certificate would advertise hostnames
+# that cannot resolve to a store, and on-demand issuance would let an attacker make
+# this host request certificates for names it does not own.
+
+{
+	email {$SHOPSEARCH_ACME_EMAIL}
+}
+
+{$SHOPSEARCH_DOMAIN} {
+	encode zstd gzip
+
+	# Operational probes stay on the public hostname but never reach a store.
+	@health path /health
+	handle @health {
+		reverse_proxy 127.0.0.1:{$SHOPSEARCH_PORT}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:{$SHOPSEARCH_PORT}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/shopsearch-access.log
+		format json
+	}
+}

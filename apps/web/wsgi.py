@@ -1,17 +1,22 @@
 """Production WSGI adapter for the store-scoped photographic storefront.
 
 ADR-0004 selects a Flask application served by Waitress as the production HTTP
-adapter. The adapter reuses the existing P1 composition and handler dispatch, so
-routes, view functions, response headers, cookies and telemetry keep their behavior.
-S2 makes it resolve each request's normalized Host to exactly one store through the
-registry; an unregistered host gets a 404 that carries no store data.
+adapter. S2 resolves each request's normalized `Host` to exactly one store through the
+registry; an unregistered host gets a 404 that carries no store data. S10 makes the
+runtime generic: configuration comes from `SHOPSEARCH_*` environment variables and
+fails closed, startup never provisions the pitch demo, `/health` checks the real
+database and media root before any hostname resolution, and operational logging stays
+separate from behavioral telemetry.
 """
 
 from __future__ import annotations
 
 import argparse
 import io
+import logging
+import sys
 import threading
+import time
 from http import HTTPStatus
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler
@@ -19,16 +24,24 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 import waitress
-from flask import Flask, Response, request
+from flask import Flask, Response, g, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from apps.web.manage import MerchantShell, ShellResponse, UploadedPhoto
-from apps.web.pitch_server import PitchApplication, build_pitch_application, open_demo_stack
+from apps.web.storefront import (
+    PitchApplication,
+    StorefrontStack,
+    build_pitch_application,
+    open_platform_stack,
+)
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.auth.service import MERCHANT_COOKIE
 from backend.catalog.publish import MerchantPublisher
 from backend.media.uploads import MAX_UPLOAD_BYTES
+from backend.platform import operational_log
+from backend.platform.health import RuntimeHealth
 from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
+from backend.runtime.config import RuntimeConfig
 from backend.search.multimodal import TextEncoder
 from backend.search.vector_source import VectorCache
 from backend.stores.resolver import HostResolver, load_development_hosts
@@ -64,9 +77,9 @@ def _request_headers(environ: Mapping[str, Any]) -> HTTPMessage:
 class _RequestBoundary(BaseHTTPRequestHandler):
     """Present one WSGI request through the legacy handler surface.
 
-    The P1 dispatch was written against ``BaseHTTPRequestHandler``. Instances are created
-    without a socket; only ``path``, ``headers``, ``wfile`` and the response methods are
-    used by that dispatch.
+    The storefront dispatch was written against ``BaseHTTPRequestHandler``. Instances
+    are created without a socket; only ``path``, ``headers``, ``wfile`` and the
+    response methods are used by that dispatch.
     """
 
     @classmethod
@@ -163,9 +176,18 @@ def _uploaded_photos() -> dict[str, UploadedPhoto]:
 
 
 def _plain(status: HTTPStatus, body: str) -> Response:
-    """A response for an unresolved host, carrying no store data and no cookie."""
+    """A response for an unresolved host or a probe, carrying no store data."""
 
     response = Response(body, status=status, content_type="text/plain; charset=utf-8")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _health_response(status: HTTPStatus, body: str) -> Response:
+    """Generic health body; never a path, SQL error, store datum or secret."""
+
+    response = Response(body, status=status, content_type="text/plain")
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
@@ -186,38 +208,54 @@ def _shell_response(result: ShellResponse) -> Response:
     return response
 
 
+def build_runtime_health(stack: StorefrontStack, logger: Any) -> RuntimeHealth:
+    """The one health check the WSGI entry point and the S1 adapter share."""
+
+    return RuntimeHealth(
+        database_check=stack.catalog_repository.check_health,
+        media_check=stack.image_store.check_health,
+        logger=logger,
+    )
+
+
 def create_pitch_app(
     encoder: TextEncoder | None = None,
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
     media_root: Path | None = None,
     storefronts: Iterable[str] | None = None,
+    *,
+    stack: StorefrontStack | None = None,
+    logger: Any | None = None,
 ) -> Flask:
     """Return the Flask application serving host-resolved storefronts.
 
     Every request resolves its normalized `Host` through the store registry to
     exactly one store. An unregistered hostname returns 404 with no store data.
-    `config/development_hosts.json` is the explicit local host-to-store map; it
-    contains no wildcard, and an unknown host never falls back to a store.
 
-    `storefronts` names the provisioned stores this composition serves; by default
-    only the bootstrapped demo store is served. A resolved store that is not
-    provisioned gets a 404 rather than another store's catalog. Retrieval reads each
-    store's embedding rows, not the import artifact `stack.index_path` names.
+    `storefronts` names the explicitly provisioned stores this composition serves.
+    This function opens the configured backends through `open_platform_stack` and
+    never seeds a store: callers that want the pitch demo pass an explicitly opened
+    demo stack (`apps.web.storefront.open_demo_stack`).
     """
 
-    stack = open_demo_stack(database_path, media_root)
+    stack = stack or open_platform_stack(database_path, media_root)
     development_hosts = load_development_hosts(
         DEFAULT_DEVELOPMENT_HOSTS_PATH if development_hosts_path is None else development_hosts_path
     )
+    # Default to the bare operational logger: production configures a handler in
+    # `serve()`/`apps.web.demo`, while tests and library callers stay quiet unless
+    # they attach their own handler.
+    logger = logger or logging.getLogger(operational_log.LOGGER_NAME)
     resolver = HostResolver(stack.store_repository, development_hosts)
-    provisioned = {stack.store.store_id} if storefronts is None else set(storefronts)
+    provisioned = set() if storefronts is None else set(storefronts)
     vector_cache = VectorCache(
         stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
     )
     applications: dict[str, tuple[int, PitchApplication]] = {}
     shells: dict[str, MerchantShell] = {}
     application_lock = threading.Lock()
+    health = build_runtime_health(stack, logger)
 
     def shell_for(store: Store) -> MerchantShell:
         with application_lock:
@@ -253,9 +291,14 @@ def create_pitch_app(
                 stack.catalog_repository,
                 stack.image_store,
                 vector_cache,
-                stack.index_path,
                 stack.telemetry_stores.for_store(store),
                 encoder,
+                health=RuntimeHealth(
+                    database_check=stack.catalog_repository.check_health,
+                    media_check=stack.image_store.check_health,
+                    logger=logger,
+                ),
+                index_path=stack.index_path if store.is_demo else None,
             )
             applications[scope.store_id] = (generation, application)
             return application
@@ -271,12 +314,41 @@ def create_pitch_app(
     def upload_too_large(error: RequestEntityTooLarge) -> Response:
         return _plain(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "That upload is too large.")
 
+    @app.before_request
+    def _start_request_timer() -> None:
+        g.shopsearch_started = time.perf_counter()
+        g.shopsearch_store_id = ""
+
+    @app.after_request
+    def _log_request(response: Response) -> Response:
+        # Operational facts only: no query string, body, cookie or CSRF value.
+        started = getattr(g, "shopsearch_started", None)
+        duration_ms = round((time.perf_counter() - started) * 1000, 2) if started else 0.0
+        operational_log.log_event(
+            logger,
+            "request",
+            method=request.method,
+            path=request.path,
+            status=response.status_code,
+            duration_ms=duration_ms,
+            store_id=getattr(g, "shopsearch_store_id", "") or None,
+        )
+        return response
+
     @app.route("/", defaults={"path": ""}, methods=["GET", "POST"])
     @app.route("/<path:path>", methods=["GET", "POST"])
     def dispatch(path: str) -> Response:
+        # Health is answered before hostname resolution so a database or media
+        # failure is reported even when no store resolves.
+        if request.path == "/health":
+            healthy, body = health.check()
+            return _health_response(
+                HTTPStatus.OK if healthy else HTTPStatus.SERVICE_UNAVAILABLE, body
+            )
         scope = resolver.resolve(request.environ.get("HTTP_HOST"))
         if scope is None:
             return _plain(HTTPStatus.NOT_FOUND, "Not found")
+        g.shopsearch_store_id = scope.store_id
         if scope.store_id not in provisioned:
             return _plain(HTTPStatus.NOT_FOUND, "Not found")
         store = stack.store_repository.find_store(scope)
@@ -304,6 +376,7 @@ def create_pitch_app(
         )
 
     app.extensions["shopsearch_stack"] = stack
+    app.extensions["shopsearch_logger"] = logger
     return app
 
 
@@ -311,12 +384,19 @@ class WaitressServer:
     """Waitress server handle with the lifecycle calls the local server exposed."""
 
     def __init__(
-        self, application: Flask, host: str = "127.0.0.1", port: int = 8000, threads: int = 4
+        self,
+        application: Flask,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        threads: int = 4,
+        config: RuntimeConfig | None = None,
     ) -> None:
         self._server: Any = waitress.create_server(
             application, host=host, port=port, threads=threads
         )
         self._stack = application.extensions.get("shopsearch_stack")
+        self._logger = application.extensions.get("shopsearch_logger")
+        self._config = config
         self._stopping = threading.Event()
 
     @property
@@ -328,6 +408,12 @@ class WaitressServer:
         return (str(self._server.effective_host), self.server_port)
 
     def serve_forever(self) -> None:
+        if self._logger is not None:
+            operational_log.log_event(
+                self._logger,
+                "startup",
+                **({"configuration": self._config.describe()} if self._config else {}),
+            )
         try:
             self._server.run()
         except OSError:
@@ -335,6 +421,9 @@ class WaitressServer:
             # expected only for the intentional shutdown path used by the acceptance tests.
             if not self._stopping.is_set():
                 raise
+        finally:
+            if self._logger is not None:
+                operational_log.log_event(self._logger, "shutdown")
 
     def shutdown(self) -> None:
         self._stopping.set()
@@ -356,8 +445,11 @@ def create_pitch_server(
     development_hosts_path: Path | None = None,
     media_root: Path | None = None,
     storefronts: Iterable[str] | None = None,
+    *,
+    stack: StorefrontStack | None = None,
+    config: RuntimeConfig | None = None,
 ) -> WaitressServer:
-    """Return a bound Waitress server for the pitch application."""
+    """Return a bound Waitress server for the storefront composition."""
 
     return WaitressServer(
         create_pitch_app(
@@ -366,26 +458,51 @@ def create_pitch_server(
             development_hosts_path,
             media_root,
             storefronts,
+            stack=stack,
         ),
         host=host,
         port=port,
+        config=config,
     )
+
+
+def serve(config: RuntimeConfig) -> None:
+    """Start the production process from validated configuration."""
+
+    logger = operational_log.configure_operational_logging(config.log_level)
+    stack = open_platform_stack(config.database_path, config.media_root)
+    server = WaitressServer(
+        create_pitch_app(
+            stack=stack,
+            development_hosts_path=config.development_hosts_path,
+            storefronts=config.store_ids,
+            logger=logger,
+        ),
+        host=config.bind_host,
+        port=config.port,
+        config=config,
+    )
+    operational_log.log_event(logger, "configuration", configuration=config.describe())
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the generic photographic pitch demo on the production WSGI adapter."
+        description=(
+            "Run ShopSearch from SHOPSEARCH_* environment configuration. "
+            "Missing or invalid configuration fails startup; no demo store is created."
+        )
     )
-    parser.add_argument("--port", type=int, default=8000)
-    arguments = parser.parse_args()
-    server = create_pitch_server(arguments.port)
-    print(f"Pitch demo ready: http://127.0.0.1:{server.server_port}", flush=True)
+    parser.parse_args()
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+        config = RuntimeConfig.from_environment()
+    except ValueError as error:
+        print(f"configuration error: {error}", file=sys.stderr, flush=True)
+        raise SystemExit(2) from error
+    serve(config)
 
 
 if __name__ == "__main__":

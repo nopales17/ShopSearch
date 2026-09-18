@@ -1,8 +1,8 @@
 import unittest
 from decimal import Decimal
 
-from apps.web.server import ROOT
 from backend.catalog.pitch import load_pitch_catalog
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
 from backend.stores.demo import demo_store_configuration

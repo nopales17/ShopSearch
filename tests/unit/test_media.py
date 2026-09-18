@@ -10,9 +10,9 @@ from zoneinfo import ZoneInfo
 
 from PIL import Image
 
-from apps.web.server import ROOT
 from backend.media.derivatives import read_capture_time, render_display
 from backend.media.image_store import LocalImageStore, MediaError, media_url
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from contracts.catalog import CaptureTimeSource
 from contracts.store import StoreScope
 

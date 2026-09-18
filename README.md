@@ -36,7 +36,34 @@ The dated September 2026 white paper is summarized and qualified in `docs/HYPOTH
 
 Git remembers history. `STATUS.md` should stay current and short.
 
-## Run the photographic pitch demo
+## Run the platform (production runtime)
+
+The production entry point is generic: it takes every path, store ID and binding from
+`SHOPSEARCH_*` environment variables, opens the configured database and media root,
+runs the forward-only migrations and serves only the listed stores. It never creates or
+imports a store, and it fails closed when configuration is missing or invalid.
+
+```sh
+export SHOPSEARCH_DATABASE=/var/lib/shopsearch/shopsearch.sqlite3
+export SHOPSEARCH_MEDIA_ROOT=/var/lib/shopsearch/media
+export SHOPSEARCH_STORES=live-store          # explicit allowlist; no default store
+export SHOPSEARCH_BIND_HOST=127.0.0.1        # loopback behind Caddy
+export SHOPSEARCH_PORT=8000
+make serve PYTHON=.venv/bin/python
+```
+
+`GET /health` checks the real database and media root (200 healthy, 503 with a generic
+body on failure) before hostname resolution. Operational logs are JSON lines on the
+standard logging stack, separate from telemetry. `deploy/` holds the provider-neutral
+Caddy template, systemd units (including the nightly backup timer) and an environment
+file example; `docs/OPERATIONS.md` documents directories, ownership, backup, restore and
+the executed local restore drill. No hosting provider, domain, certificate or bucket is
+configured or claimed.
+
+Merchant accounts are founder-provisioned interactively; the service has no committed
+secret and no Flask client-side session.
+
+## Run the photographic pitch demo (explicit developer path)
 
 P1 presents a fictional specialty shop, FORM & FIELD, using 90 permitted real-object
 photographs (30 originally curated, 60 mechanically selected) from the Cleveland Museum
@@ -52,14 +79,16 @@ precomputed vectors are already committed. Subsequent inference works locally.
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 make pitch-setup PYTHON=.venv/bin/python
-make serve PYTHON=.venv/bin/python
+make demo PYTHON=.venv/bin/python
 ```
 
 Open `http://127.0.0.1:8000`. Follow “See What's In Store,” then try “small blue one
 under $50,” “simple clear one,” or “colorful.” Price ceilings are deterministic;
 unknown prices are excluded. CLIP ranks image similarity without an LLM. Startup
 warms text inference. The storefront is served by the Flask application in
-`apps/web/wsgi.py` under Waitress, the production HTTP adapter selected in ADR-0004;
+`apps/web/wsgi.py` under Waitress, the production HTTP adapter selected in ADR-0004.
+`make demo` (`python -m apps.web.demo`) is the only command that seeds the demo store
+and imports its dataset, embeddings and retrieval index; production startup never does.
 `make pitch` remains an alias. This remains a local demo, not a publicly hosted website.
 
 Storefront events persist to the platform database (`data/local/shopsearch.sqlite3`) in
@@ -67,7 +96,7 @@ the store-scoped telemetry table, keeping the `pitch_demo` classification and
 store/session/search correlation. For another port:
 
 ```sh
-.venv/bin/python -m apps.web.wsgi --port 8018
+.venv/bin/python -m apps.web.demo --port 8018
 make pitch-eval PYTHON=.venv/bin/python
 make report PYTHON=.venv/bin/python
 make check PYTHON=.venv/bin/python
@@ -107,24 +136,16 @@ Passwords are entered at an interactive prompt and never as arguments. The merch
 cookie is `Secure`, so browsers accept it on a localhost origin over http while any other
 host needs HTTPS. See `docs/CREDENTIALS.md` for session, CSRF and throttling details.
 
-## Run the Issue #1 fixture slice
-
-This local slice uses only explicitly marked demo/test fixtures. It is not Customer Zero inventory, does not show product photos, and uses deterministic token matching rather than semantic retrieval.
+## Operator commands
 
 ```sh
-make run
+make backup PYTHON=.venv/bin/python    # consistent SQLite snapshot + media mirror + verify
+make restore PYTHON=.venv/bin/python   # restore onto a clean destination (refuses to overwrite)
+.venv/bin/python -m backend.search.indexer --store-id live-store   # process pending/failed items
 ```
 
-Open `http://127.0.0.1:8000`. Events persist to `data/local/telemetry.jsonl`, which is ignored by Git. Use a separate file while testing if you want to keep runs apart:
-
-```sh
-python3 -m apps.web.server --telemetry-path /tmp/shopsearch-telemetry.jsonl
-```
-
-Requires Python 3.11+. The Issue #1 fixture slice itself has no third-party runtime
-dependencies; the photographic storefront and full test suite use the pinned
-Flask/Waitress runtime in `requirements.txt`. Install the development checks once, then
-run the same checks as CI:
+Requires Python 3.11+. Install the development checks once, then run the same checks as
+CI:
 
 ```sh
 python3 -m venv .venv
@@ -136,13 +157,10 @@ make check PYTHON=.venv/bin/python
 adapter. `make check` adds compilation, Ruff lint/format checks and mypy. CI is configured
 for Python 3.11 and 3.12; a local pass does not claim a remote CI run.
 
-Only one process may write a telemetry file. Events persist across restart; tests
-use temporary files. Search/item events include session/store/search IDs and catalog
-snapshots; duplicate event IDs are rejected or ignored if identical. Page reloads
-are new interactions, not deduplicated visits. No purchase or availability is inferred.
-
-The HTTP server binds loopback only and is for local development, not public hosting.
-The fixture loader deliberately rejects real catalogs. Placeholder ranking returns
-up to 12 records even when token overlap is zero. Price/category constraints work at
-the service boundary; natural-language price parsing and filter UI are in P1 pitch mode.
-See `docs/adr/0002-local-fixture-runtime.md` for runtime/storage limits.
+Events persist in the store-scoped platform database across restart; tests use temporary
+directories. Search/item events include session/store/search IDs and catalog snapshots;
+duplicate event IDs are rejected or ignored if identical. Page reloads are new
+interactions, not deduplicated visits. No purchase or availability is inferred. The
+HTTP server binds loopback and is intended to sit behind a TLS-terminating proxy, not to
+be exposed directly. The Issue #1 fixture runtime is retired; see
+`docs/adr/0002-local-fixture-runtime.md` (historical) and `docs/OPERATIONS.md`.

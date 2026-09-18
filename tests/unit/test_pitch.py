@@ -7,9 +7,9 @@ import unittest
 from decimal import Decimal
 from pathlib import Path
 
-from apps.web.server import ROOT
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.catalog.pitch import load_pitch_catalog
+from backend.platform.paths import REPOSITORY_ROOT as ROOT
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
 from backend.search.vector_source import CommittedIndexVectorSource
