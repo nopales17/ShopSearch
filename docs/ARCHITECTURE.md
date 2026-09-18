@@ -62,7 +62,9 @@ Does not own:
 
 Search is a downstream consumer of the catalog representation, not ShopSearch's product
 identity, and retrieval/ranking technology should remain replaceable without changing
-catalog authority or the public contract. Structured, exact or standardized questions
+catalog authority or the public contract. Publication authority therefore never depends on
+semantic indexing: an item may be published and browsable while its index entry is pending,
+failed or stale, and ADR-0005 owns the resulting index-state and disclosure rules. Structured, exact or standardized questions
 (identity, brand, SKU/model, size and other supported fields) should use deterministic
 structured data and filters where they exist rather than defaulting to embeddings.
 Embeddings serve fuzzy, appearance-led or otherwise unrepresentable attributes;
@@ -135,6 +137,11 @@ For Phase 1:
 
 Do not add distributed infrastructure.
 
+ADR-0004 selects the production runtime and persistence for the store-scoped platform
+(WSGI/Waitress, SQLite in WAL mode, a content-addressed local image store, per-item
+embedding rows) and records them as initial implementations behind adapters, with explicit
+portability rules and revisit triggers. It supersedes ADR-0002 for production callers only.
+
 ## Model strategy
 Expensive model work should happen primarily at ingestion/index time.
 
@@ -161,7 +168,7 @@ Do not claim real-time stock unless supported.
 These are implementation constraints for immediate callers, not claims that the current dataclasses enforce them. Keep ADR-0001's single deployable boundary; the suggested web framework is not an accepted second service.
 
 - Catalog owns a deterministic public representation policy. Search returns relevance and item references; a composed response may carry catalog-produced freshness fields, but search cannot derive availability or invent explanations.
-- Keep stable catalog IDs independent of photo/source IDs. Define resolvable observation references when the loader is built. Preserve source/capture time separately from import/publication time; unknown capture time cannot support recency. Store scope may come from one validated configuration in Phase 1; no tenant framework is needed.
+- Keep stable catalog IDs independent of photo/source IDs. Define resolvable observation references when the loader is built. Preserve source/capture time separately from import/publication time; unknown capture time cannot support recency. Store scope came from one validated configuration in Phase 1; ADR-0005 now makes `store_id` a mandatory scope on every catalog, media, embedding and telemetry operation, resolved by hostname, for founder-provisioned stores. That is store scoping, not the generic tenant framework this document still declines.
 - Validate incoming records and event payloads at boundaries; dataclass annotations do not validate JSON. Deliberately parse decimal prices, bind currency to the store, and reject invalid references/identifiers. Implement only the fields required by the first caller.
 - Manual review authorizes initial public attributes/prices. Later model proposals must retain provenance and pass explicit review/policy before publication. A generic confidence score cannot encode evidential support or override conflicting observations.
 - Better crop quality, barcode identity, invoice receiving records and POS state are different evidence dimensions, not a universal quality/authority ladder. A barcode can identify a product type without identifying an individual specimen. Future adapters may include barcode/product databases without requiring vision; add concrete enum cases only with a real caller.

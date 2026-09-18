@@ -8,8 +8,23 @@ Deploy a polished Customer Zero website with a manually curated, honestly repres
 ## Customer and business context
 Founder correction on 2026-09-08: the friend's newly opened smoke shop is a prospective Customer Zero with little/no modern POS or web inventory. The concept has not yet been formally pitched. Payment and willingness to pay are unvalidated; no adoption or commercial commitment is established. This supersedes the earlier report that the friend wanted to pay.
 
+Founder update 2026-09-18: the prospective owner has expressed that he wants a website
+after seeing comparable storefronts. This records expressed interest only. Pricing, final
+design, payment, merchandise-publication permission and the exact business inputs remain
+unresolved, and no commitment or willingness to pay is established.
+
 ## Release boundary
 This document specifies only the conditional prospective Customer Zero release. The completed generic P1 pitch is described in `STATUS.md`, `adr/0003-local-multimodal-pitch.md` and E-001; its illustrative prices and museum photographs are not store-release data. Historical P1 requirements remain in Git history.
+
+Amendment 2026-09-18 (founder-approved, D1). The release boundary now permits
+**founder-provisioned, store-scoped storefronts and more than one store**: store identity,
+branding, business facts, disclosures and hostname resolution are configuration held per
+store rather than one hardcoded configuration. This is a delivery-vehicle amendment, not a
+scope expansion. Generic self-service tenant management remains deferred: stores and
+merchant accounts are provisioned by the founder, there are no merchant roles or permission
+levels, there is no signup, billing or plan management, and no cross-store or multi-store
+intelligence is built. `adr/0005-store-scoped-platform.md` owns the resulting boundaries and
+`docs/SLICES.md` owns the implementation sequence.
 
 The customer is deciding whether to visit. The first value is seeing actual merchandise; incremental semantic-search value is tested separately from catalog browsing. `CHARTER.md` owns reusable delivery direction; `ROADMAP.md` and H5 own commercial progression. Platform embedding and asynchronous AI enrichment are not added to this release.
 
@@ -27,22 +42,24 @@ No customer image upload, find-similar button, availability-request workflow, ch
 - Clearly describe the catalog as a selection of photographed merchandise.
 - Merchant input follows CHARTER's photo+price baseline; no conventional product form is required. The curator/system records item ID, image source/permission, known price/category/attributes, store scope and observation provenance. Unknown values remain unknown; no invented price, title fact or capture timestamp. This does not require an automated enrichment feature.
 - Distinguish photo capture/observation time from import/publication time. “Photographed today” requires a supported capture date in the store timezone. If capture time is unknown, omit recency claims and say availability may have changed. Prefer a dated observation to an indefinitely “recent” label.
+- Publication is independent of semantic indexing. An item may be published and browsable while its semantic index entry is pending, failed or stale; indexing never gates publication, and pending indexing is never presented as physical absence.
 - Curator validates records and images, reviews public fields, publishes, and can correct or withdraw listings. Document this simple workflow and name a refresh contact before launch; no dashboard is required.
 - Measure photography, entry, review, correction, and publication time, useful items published, and coverage limitations. Manual labor is the automation comparison baseline.
 - No generated substitute imagery. Presentation edits must preserve the actual item; the first release needs only ordinary photos.
-- Use one store configuration for branding, location, currency, timezone, and approved content/disclosures. Do not build tenant management or a generic policy engine.
+- Each store has one validated configuration for branding, location, currency, timezone, and approved content/disclosures, resolved by hostname. Stores and merchant accounts are founder-provisioned; a store may have several merchant accounts, all with the same abilities within that store. Do not build self-service tenant management, merchant roles or a generic policy engine.
 
 ## Search acceptance
 - Free text returns ranked visual results through stored image embeddings and a simple evaluated baseline; hard constraints are deterministic.
 - `price_max` is inclusive. Natural-language “under $50” is strict (< 50); “up to $50” is inclusive. Implement a narrow explicit parser/constraint representation when retrieval is built; do not silently round or weaken constraints. Unknown prices are excluded under either ceiling.
 - Define expected relevance before tuning. At least 8/10 fixed agreed queries must have sensible top-5 results by the recorded human rubric. Also test unsupported/no-match queries and compare equivalent tasks with browsing/categories.
 - Suggested performance budget: warm server search p95 <= 1 second at demo scale on the intended deployment. Confirm measurement conditions before evaluation; record cold-start and browser-visible latency separately. This is a target, not evidence or an SLA.
+- Browsing, category filtering and price constraints or sorts must work over the full published selection regardless of index state. Free-text visual retrieval ranks only indexed items; when published items are not yet indexed, the page must say so with an accurate count and keep a browse path to the full published selection. The indexed subset is never presented as the store's full represented selection.
 - Automated checks cover price boundaries, unknown prices, invalid records, supported public wording, and the end-to-end flow. No result that fails a hard constraint may be returned.
 
 ## Telemetry and interpretation
 Instrument from the first runnable slice and add events alongside their UI actions. Persist session_started, catalog_opened, search_submitted, search_results_returned, zero_results (when applicable), item_opened, directions_clicked, and call_clicked. Add homepage_viewed when implementing the homepage denominator. Deferred-feature events are not required until those features exist.
 
-Each search needs an ID, pseudonymous session ID, store ID, timestamp, original query, parsed filters, returned IDs/ranks/count, and catalog/index version. Preserve displayed observation context by an immutable snapshot or resolvable version. Item/action events link to the originating search when applicable; browsing actions must also work without a search ID. Event IDs support duplicate prevention. Classify test/demo traffic separately.
+Each search needs an ID, pseudonymous session ID, store ID, timestamp, original query, parsed filters, returned IDs/ranks/count, and catalog/index version. Search events also record published, indexed and excluded-unindexed counts so a zero-result search can be attributed to retrieval, catalog coverage or pending indexing rather than collapsing them. Preserve displayed observation context by an immutable snapshot or resolvable version. Item/action events link to the originating search when applicable; browsing actions must also work without a search ID. Event IDs support duplicate prevention. Classify test/demo traffic separately.
 
 Provide a simple internal report: homepage/catalog sessions, searches, zero-result searches, normalized queries, item clicks, call/directions clicks, and defined denominators. Keep original query distinct from derived normalization. A session is not a unique person. Calls/directions are clicks, not completed calls, visits, or purchases. A nearest-neighbor list is not proof of a suitable match; no/low results may reflect catalog coverage, filters, retrieval failure, or physical absence.
 

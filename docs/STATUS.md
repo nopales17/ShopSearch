@@ -1,6 +1,6 @@
 # Current Status
 
-Updated 2026-09-17.
+Updated 2026-09-18.
 
 ## Phase and last known good
 Phase 1 — customer search proof, including unfinished Phase 0 prerequisites.
@@ -45,23 +45,55 @@ Funnel reporting covers persisted local demo traffic only; public-telemetry rete
 access and notice decisions remain unresolved.
 
 ## Current objective
-Deploy a polished prospective Customer Zero website with a manually curated, honestly represented catalog of at least 30 real store items, natural-language retrieval, deterministic price constraints, and validated discovery telemetry. The conditional store release remains pending; P1 does not complete Issue #2.
+Build the reusable store-scoped platform machinery that the Customer Zero release will be
+delivered on, so a storefront can be provisioned as soon as permission, business inputs and
+merchandise images exist. The release contract in PRODUCT is unchanged and still owns the
+store release; the conditional store release remains pending, and P1 does not complete
+Issue #2.
+
+Founder decisions recorded 2026-09-18: the PRODUCT release boundary is amended to permit
+founder-provisioned, store-scoped storefronts and more than one store, with generic
+self-service tenant management still deferred; publication authority stays independent of
+semantic indexing; several founder-provisioned merchant accounts per store are permitted;
+isolation is enforced by repository boundaries, schema constraints and adversarial tests
+rather than static SQL inspection; and SQLite, local blob storage, Waitress and Caddy are
+the selected initial deployment implementations behind adapters, not permanent product
+architecture. `adr/0004-production-runtime.md` and `adr/0005-store-scoped-platform.md`
+record the architecture; `docs/SLICES.md` records the implementation sequence and
+acceptance criteria. Nothing in S1-S10 is implemented yet.
 
 ## Active acceptance criteria
-See PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
+See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-Support the first formal pitch of P1 to the prospective Customer Zero, then record
-the owner's actual response, objections, willingness-to-pay discussion and permission
+S1 in `docs/SLICES.md`: move the existing storefront onto the production HTTP adapter
+described in ADR-0004, preserving behavior exactly. Execute only S1; its acceptance
+criteria and non-goals are in the slice register, and the escalation rules in AGENTS apply.
+
+In parallel and founder-owned, not an agent task: record the prospective owner's stated
+requirements, objections, pricing discussion and permission
 (or refusal) to photograph/publish merchandise. The founder owns the external
 conversation; agents must not invent its outcome or contact the owner unasked.
 Do not begin the full Issue #2 workflow until permission and source inputs exist.
 
-Factual correction: the shop is a prospective Customer Zero. The concept has not
-been formally pitched; payment and willingness to pay remain unvalidated.
+Factual correction (2026-09-18, founder-provided): the shop remains a prospective
+Customer Zero. The prospective owner has expressed that he wants a website after seeing
+comparable storefronts. That is expressed interest only. Pricing, final design, payment,
+merchandise-publication permission and the exact business inputs remain unresolved; no
+commitment, payment, willingness-to-pay figure or publication permission is established.
 
 ## Dependencies / blockers
 No technical blocker remains to a local pitch; initial setup downloads pinned model weights and later inference is local. Issue #2 depends on permission, actual shop images and observation/price information. These inputs are not in the repository. Public launch has the further PRODUCT dependencies (verified business content, domain/hosting access, refresh responsibility, commercial terms and applicable publication/privacy requirements). No external issue creation/payment/deployment is established here. Demo traces are not customer-demand observations.
+
+Open founder decisions that block deployment but not S1-S9: hosting target and budget (the
+pinned CLIP runtime implies roughly 2-4 GB RAM and a persistent volume); domain strategy
+(a ShopSearch subdomain versus the owner's own domain, with automated domain purchase
+deferred); telemetry retention, access and notice, which PRODUCT requires resolved before
+public telemetry; and whether HEIC uploads must be supported, which would add a dependency
+and need an ADR-0004 amendment. Two smaller decisions were taken by default in ADR-0005 and
+can be reversed on request: sold items are excluded from customer surfaces rather than shown
+marked sold, and an explicit merchant attestation counts as support for a capture date when
+image metadata carries none, recorded with its source.
 
 ## Dependency order (roughly 1–2 weeks, not a waiting schedule)
 1. Runnable fixture skeleton + minimum persistent telemetry. Completed in Issue #1.

@@ -22,6 +22,7 @@ Read `AGENTS.md` first, then its prescribed order:
 - `docs/MAP.md`
 - `docs/PRODUCT.md` before product implementation
 - `docs/HYPOTHESES.md` for experiments, strategic context and promotion gates
+- `docs/SLICES.md` before implementing a platform transition slice
 
 ## Repository principle
 The project separates:
@@ -37,9 +38,10 @@ Git remembers history. `STATUS.md` should stay current and short.
 
 ## Run the photographic pitch demo
 
-P1 presents a fictional specialty shop, FORM & FIELD, using 30 permitted real-object
-photographs from the Cleveland Museum of Art's CC0 collection. These are museum
-objects, not goods offered for sale or the prospective shop's inventory. The site
+P1 presents a fictional specialty shop, FORM & FIELD, using 90 permitted real-object
+photographs (30 originally curated, 60 mechanically selected) from the Cleveland Museum
+of Art's CC0 collection. These are museum objects, not goods offered for sale or the
+prospective shop's inventory. The site
 discloses manual curation and illustrative prices. Call/Directions are simulated.
 
 Use Python 3.11/3.12. First setup installs the optional pinned CLIP runtime and

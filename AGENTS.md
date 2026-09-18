@@ -18,6 +18,8 @@ Then read only what the task needs:
 
 - `docs/PRODUCT.md` before product, UI, public-copy or release work.
 - `docs/HYPOTHESES.md` before experiments, strategic interpretation or promotion gates.
+- `docs/SLICES.md` plus `docs/adr/0004` and `docs/adr/0005` before any platform
+  transition slice; it owns slice scope and acceptance criteria.
 - `docs/ROADMAP.md` only when selecting future work.
 - Relevant `docs/adr/` records before an architectural change.
 - `docs/EVIDENCE.md` before citing or updating findings; never rewrite historical

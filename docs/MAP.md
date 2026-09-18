@@ -13,6 +13,7 @@ shopsearch/
 │   ├── PRODUCT.md            Customer Zero release specification + pending inputs
 │   ├── HYPOTHESES.md         test register + dated white-paper source/qualifications
 │   ├── STATUS.md             current working memory
+│   ├── SLICES.md             platform transition slices + acceptance criteria
 │   ├── ROADMAP.md            staged future work + falsification gates
 │   ├── ARCHITECTURE.md       module boundaries + invariants
 │   ├── MAP.md                this file
@@ -56,6 +57,12 @@ fixture_test/pitch_demo traffic. `apps/web/pitch_server.py` reuses the Issue #1 
 boundary and composes the photographic demo; `pitch_views.py` and static pitch CSS/JS
 provide the UI. `data/local/` holds ignored model weights, preparation files and logs.
 No dataset represents Customer Zero inventory. ADR-0003 explains the pitch extension.
+
+`docs/SLICES.md` owns the ordered implementation slices for the store-scoped platform
+transition and their acceptance criteria; `docs/adr/0004-production-runtime.md` and
+`docs/adr/0005-store-scoped-platform.md` own the runtime and boundary decisions it
+implements. None of those slices is implemented yet; the tree above still describes the
+Issue #1 fixture slice and the P1 pitch demo as they actually exist.
 
 `backend/telemetry/report.py` reads a persisted local event JSONL and prints
 deterministic demo funnel counts with explicit denominators. It does not infer
