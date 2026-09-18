@@ -8,6 +8,7 @@ from typing import Any
 
 class EventType(str, Enum):
     SESSION_STARTED = "session_started"
+    HOMEPAGE_VIEWED = "homepage_viewed"
     CATALOG_OPENED = "catalog_opened"
     SEARCH_SUBMITTED = "search_submitted"
     SEARCH_RESULTS_RETURNED = "search_results_returned"

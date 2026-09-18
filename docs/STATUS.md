@@ -1,6 +1,6 @@
 # Current Status
 
-Updated 2026-09-09.
+Updated 2026-09-17.
 
 ## Phase and last known good
 Phase 1 — customer search proof, including unfinished Phase 0 prerequisites.
@@ -12,11 +12,16 @@ ADR-0002 records the local standard-library runtime and single-writer JSONL limi
 preserving ADR-0001. ADR-0003 records P1's optional local model adapter; E-001 records its limited retrieval findings.
 
 ## Verification
-21 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+26 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation and
 concurrent duplicate-safe event writes. Compilation, Ruff lint/format and mypy pass
 on Python 3.12. Browser form submission and item detail were manually checked.
 CI uses the same checks on Python 3.11/3.12; remote CI has not been run in this pass.
+P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
+read-only local demo funnel report with explicit denominators. Incomplete search
+traces are correlated per session/search ID and reported separately from `zero_results`
+events. Report counts are recorded demo interactions, not people, purchases,
+availability, demand or customer value.
 P1's frozen agent-authored rubric passed 10/10 top-three/price tasks. Mean visual precision@5 was 0.489 and graded nDCG@5 was 0.733. Warm uncached retrieval p95 was 12.27 ms locally, excluding HTTP/telemetry. The manually tagged lexical comparator scored higher nDCG@5 (0.888). “Colorful” and “dark and weird” remain weak; unrelated queries return neighbors. See E-001, the frozen rubric and raw results in experiments/search_v0. This is not customer-value or model-superiority evidence.
 
 P2 ran one index build and one preregistered CLIP/lexical/fixed-hybrid comparison.
@@ -36,6 +41,8 @@ page reloads count as new interactions. Token ranking returns up to 12 records e
 with no overlap. Explicit service price/category filters work; natural-language
 price parsing and customer filters are now available in P1's separate pitch mode. Fixture source records are
 synthetic, resolvable observations; catalog-owned public snapshots assert no stock.
+Funnel reporting covers persisted local demo traffic only; public-telemetry retention,
+access and notice decisions remain unresolved.
 
 ## Current objective
 Deploy a polished prospective Customer Zero website with a manually curated, honestly represented catalog of at least 30 real store items, natural-language retrieval, deterministic price constraints, and validated discovery telemetry. The conditional store release remains pending; P1 does not complete Issue #2.

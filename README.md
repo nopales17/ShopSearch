@@ -64,8 +64,15 @@ Pitch events persist separately to `data/local/pitch-telemetry.jsonl` with
 ```sh
 .venv/bin/python -m apps.web.pitch_server --port 8018 --telemetry-path /tmp/pitch.jsonl
 make pitch-eval PYTHON=.venv/bin/python
+make report PYTHON=.venv/bin/python
 make check PYTHON=.venv/bin/python
 ```
+
+`make report` reads the local pitch event log and prints recorded demo counts with
+explicit denominators, including `homepage_viewed` sessions, catalog opens, searches,
+zero-result searches, normalized queries and item/action clicks. It is a read-only
+local operator view: sessions are not people, clicks are not visits or purchases, and
+counts are not availability or customer-value evidence.
 
 The evaluator uses frozen pre-retrieval labels and writes a timestamped result under
 `data/local/pitch-evaluations/`, preserving committed history. See `experiments/search_v0/PITCH_PROTOCOL.md`,

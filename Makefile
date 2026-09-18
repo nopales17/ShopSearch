@@ -1,5 +1,5 @@
 PYTHON ?= python3
-.PHONY: run pitch pitch-setup pitch-eval test check
+.PHONY: run pitch pitch-setup pitch-eval report test check
 
 run:
 	$(PYTHON) -m apps.web.server
@@ -13,6 +13,9 @@ pitch-setup:
 
 pitch-eval:
 	$(PYTHON) -m experiments.search_v0.evaluate_pitch
+
+report:
+	$(PYTHON) -m backend.telemetry.report
 
 test:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py' -v

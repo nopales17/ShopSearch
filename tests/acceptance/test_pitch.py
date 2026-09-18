@@ -12,6 +12,7 @@ from urllib.request import HTTPCookieProcessor, build_opener
 
 from apps.web.pitch_server import create_pitch_server
 from backend.telemetry.jsonl_store import JsonlTelemetryStore
+from backend.telemetry.report import summarize
 from tests.unit.test_pitch import StubEncoder
 
 
@@ -70,10 +71,23 @@ class PitchHttpTest(unittest.TestCase):
                 "item_opened",
                 "call_clicked",
                 "directions_clicked",
+                "homepage_viewed",
             }
             <= {e["event_type"] for e in events}
         )
         self.assertTrue(events[-1]["payload"]["simulated"])
+        report = summarize(events)
+        self.assertEqual(
+            report["sessions"],
+            {"total": 1, "homepage": 1, "catalog": 1, "search": 1, "item": 1, "store_action": 1},
+        )
+        self.assertEqual(report["counts"]["zero_result_searches"], 0)
+        self.assertEqual(report["counts"]["call_clicks"], 1)
+        self.assertEqual(report["counts"]["direction_clicks"], 1)
+        self.assertEqual(
+            report["normalized_queries"],
+            [{"query": "small blue under $50", "count": 1}],
+        )
 
     def test_zero_results_and_safe_static_routes(self) -> None:
         result = json.loads(self.get("/api/search?q=under%20%241"))

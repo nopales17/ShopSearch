@@ -80,6 +80,7 @@ class PitchApplication(WebApplication):
         status = HTTPStatus.OK
         content_type = "text/html; charset=utf-8"
         if parsed.path == "/":
+            self.event(EventType.HOMEPAGE_VIEWED, session, {})
             body = views.home(self.catalog)
         elif parsed.path == "/credits":
             body = views.credits(self.catalog)

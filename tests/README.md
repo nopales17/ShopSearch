@@ -6,10 +6,11 @@
 
 Phase 1 should include a fixed retrieval evaluation set with human-authored expected relevance.
 
-Issue #1 and P1 use the standard-library unittest runner. `make test` runs 19 tests,
+Issue #1 and P1 use the standard-library unittest runner. `make test` runs 26 tests,
 including real loopback HTTP journeys that follow rendered links, restart persistence,
 foreign-session/invalid attribution rejection, fixture validation, explicit service
-constraints and concurrent/idempotent event writes. Fixtures never assert real stock.
+constraints, concurrent/idempotent event writes and the read-only demo funnel report.
+Fixtures never assert real stock.
 
 After installing requirements-dev.txt, `make check PYTHON=.venv/bin/python` also
 compiles modules, checks Ruff lint/format and runs mypy on application/contracts.

@@ -29,7 +29,7 @@ shopsearch/
 │   ├── catalog/              separate fixture and photographic-demo validation/loading
 │   ├── search/               placeholder + CLIP ranking; deterministic price parser
 │   ├── ingestion/            ingestion adapters
-│   ├── telemetry/            local append-only JSONL persistence
+│   ├── telemetry/            local append-only JSONL persistence + read-only report
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             local pinned CLIP encoder/model download
 ├── apps/
@@ -56,6 +56,10 @@ fixture_test/pitch_demo traffic. `apps/web/pitch_server.py` reuses the Issue #1 
 boundary and composes the photographic demo; `pitch_views.py` and static pitch CSS/JS
 provide the UI. `data/local/` holds ignored model weights, preparation files and logs.
 No dataset represents Customer Zero inventory. ADR-0003 explains the pitch extension.
+
+`backend/telemetry/report.py` reads a persisted local event JSONL and prints
+deterministic demo funnel counts with explicit denominators. It does not infer
+availability, demand, customers or purchase outcomes, and it does not write telemetry.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion
