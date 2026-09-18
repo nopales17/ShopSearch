@@ -60,6 +60,16 @@ Does not own:
 - catalog mutation
 - operational recommendations
 
+Search is a downstream consumer of the catalog representation, not ShopSearch's product
+identity, and retrieval/ranking technology should remain replaceable without changing
+catalog authority or the public contract. Structured, exact or standardized questions
+(identity, brand, SKU/model, size and other supported fields) should use deterministic
+structured data and filters where they exist rather than defaulting to embeddings.
+Embeddings serve fuzzy, appearance-led or otherwise unrepresentable attributes;
+structured and semantic retrieval are complementary, not competing replacements. No
+specific search, vector-database or vendor technology is an architectural dependency;
+add one only for a concrete caller.
+
 ### Ingestion
 Owns:
 - converting external observations into typed candidates/observations

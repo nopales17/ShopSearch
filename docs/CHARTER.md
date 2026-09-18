@@ -86,3 +86,4 @@ This project is not currently:
 6. Real behavior beats founder intuition.
 7. High-consequence recommendations require stronger evidence than low-risk experiments.
 8. Founder onboarding, setup and support minutes per location are first-class commercial scalability metrics, separate from merchant catalog labor. Early sales are founder-led; H5 defines the repeatability test.
+9. The paid website opportunity and the searchable-inventory experiment are separable. A website sale is not by itself validation of searchable inventory, and weak search interest does not by itself invalidate the website opportunity.
