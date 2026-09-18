@@ -6,6 +6,7 @@ Bytes are addressed by `(store_id, sha256, variant)`. Callers receive a URL from
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
 from typing import Protocol
@@ -61,6 +62,9 @@ class LocalImageStore:
     def put(self, scope: StoreScope, sha256: str, variant: str, data: bytes) -> bool:
         if not isinstance(data, bytes) or not data:
             raise MediaError("image bytes must be a non-empty byte string")
+        validate_media_address(sha256, variant)
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise MediaError("bytes do not match the supplied content address")
         path = self._path(scope, sha256, variant)
         if path.exists():
             if path.read_bytes() != data:

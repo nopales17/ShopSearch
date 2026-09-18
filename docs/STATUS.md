@@ -32,7 +32,7 @@ through the repository and media layer; search uses a compatibility vector sourc
 by item ID, so ranking is unchanged.
 
 ## Verification
-82 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+83 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -42,7 +42,8 @@ loopback host resolution (`Shop.Example.COM:8443` / trailing dot / bare), unknow
 demo-disclosure enforcement, an import-boundary test for `sqlite3`, and golden-hash
 parity of the four deterministic demo pages against the pre-S2 bytes.
 S3 adds importer idempotence (a second run creates no item, image, event or blob),
-stored-SHA/byte verification for every imported image, EXIF/GPS/DateTimeOriginal
+stored-SHA/byte verification for every imported image, rejection of bytes whose
+content address does not match the stored hash, EXIF/GPS/DateTimeOriginal
 absence in served derivatives, unknown-capture-time enforcement plus schema checks,
 listing-state filtering, composite-FK rejection of a cross-store image, cross-store
 item and media 404s, publication independent of `index_state`, and frozen-query rank

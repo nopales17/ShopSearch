@@ -91,6 +91,21 @@ class ImageStoreTest(unittest.TestCase):
         with self.assertRaises(MediaError):
             self.store.put(self.scope, self.sha256, "display", b"different")
 
+    def test_rejects_bytes_that_do_not_match_the_supplied_content_address(self) -> None:
+        wrong = "f" * 64
+        self.assertNotEqual(hashlib.sha256(self.data).hexdigest(), wrong)
+        with self.assertRaises(MediaError):
+            self.store.put(self.scope, wrong, "display", self.data)
+        # Nothing was created: no blob and no stray file or directory under the root.
+        self.assertFalse(self.store.exists(self.scope, wrong, "display"))
+        self.assertEqual(self.store.blob_count(self.scope), 0)
+        root = Path(self.directory.name) / "media"
+        self.assertEqual([path for path in root.rglob("*") if path.is_file()], [])
+        # Correctly addressed bytes keep working unchanged.
+        self.assertTrue(self.store.put(self.scope, self.sha256, "display", self.data))
+        self.assertEqual(self.store.read(self.scope, self.sha256, "display"), self.data)
+        self.assertFalse(self.store.put(self.scope, self.sha256, "display", self.data))
+
     def test_media_url_is_store_scoped_and_content_addressed(self) -> None:
         url = media_url(self.scope, self.sha256, "display")
         self.assertEqual(url, f"/media/pitch-demo/{self.sha256}/display")
