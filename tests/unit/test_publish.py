@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -16,6 +18,7 @@ from backend.catalog.publish import MerchantPublisher, PublishError, parse_price
 from backend.catalog.store_repository import CatalogRepository
 from backend.media.image_store import LocalImageStore
 from backend.media.uploads import MAX_UPLOAD_BYTES, UploadError, validate_upload
+from backend.platform import db as platform_db
 from backend.platform.paths import DEFAULT_DEMO_STORE_PATH
 from backend.stores.config import load_store_config_in_memory
 from backend.stores.repository import StoreRepository
@@ -197,3 +200,162 @@ class PublisherTest(unittest.TestCase):
                 category="",
                 attested_capture=False,
             )
+
+
+class _HookedConnection:
+    """Forward one sqlite3 connection while observing statements for the race test."""
+
+    def __init__(self, connection, hook) -> None:
+        self._connection = connection
+        self._hook = hook
+
+    def execute(self, statement, parameters=()):
+        self._hook("before", statement)
+        cursor = self._connection.execute(statement, parameters)
+        self._hook("after", statement)
+        return cursor
+
+    def __enter__(self):
+        self._connection.__enter__()
+        return self
+
+    def __exit__(self, *exc_info):
+        return self._connection.__exit__(*exc_info)
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+
+class _HookedDatabase:
+    def __init__(self, database, hook) -> None:
+        self._database = database
+        self._hook = hook
+
+    def connection(self):
+        return _HookedConnection(self._database.connection(), self._hook)
+
+    def close(self) -> None:
+        self._database.close()
+
+
+class PublishConcurrencyTest(unittest.TestCase):
+    """Simultaneous identical publications resolve to one represented item."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        root = Path(self.directory.name)
+        self.database_path = root / "shopsearch.sqlite3"
+        self.image_store = LocalImageStore(root / "media")
+        with StoreRepository.open(self.database_path) as stores:
+            self.store = self.create_store(stores, "live-store")
+            self.other = self.create_store(stores, "other-store")
+
+    def create_store(self, stores: StoreRepository, store_id: str):
+        document = json.loads(DEFAULT_DEMO_STORE_PATH.read_text())
+        document["store_id"] = store_id
+        document["is_demo"] = False
+        document["domains"] = []
+        store, domains = load_store_config_in_memory(document)
+        return stores.create_store(store, domains)
+
+    def publisher(self, store, hook) -> MerchantPublisher:
+        database = _HookedDatabase(platform_db.Database.open(self.database_path), hook)
+        self.addCleanup(database.close)
+        return MerchantPublisher(store, CatalogRepository(database), self.image_store)
+
+    def publish(self, publisher, photo: bytes, *, title: str):
+        return publisher.publish(
+            merchant_id="merchant-1",
+            photo=photo,
+            declared_content_type="image/jpeg",
+            price="10.00",
+            title=title,
+            category="Bowls",
+            attested_capture=False,
+        )
+
+    def test_simultaneous_identical_publishes_yield_one_item_and_one_duplicate(self) -> None:
+        photo = jpeg_bytes(size=(48, 32))
+        first_insert_reached = threading.Event()
+        second_lookup_done = threading.Event()
+
+        def hook_first(phase: str, statement: str) -> None:
+            # Hold the first transaction open after its own lookup so the second
+            # publication performs an identical lookup against uncommitted state.
+            if phase == "before" and statement.startswith("INSERT INTO images"):
+                first_insert_reached.set()
+                if not second_lookup_done.wait(10):
+                    raise AssertionError("the second publication never reached its lookup")
+
+        def hook_second(phase: str, statement: str) -> None:
+            if phase == "after" and statement.startswith("SELECT item_id FROM images"):
+                second_lookup_done.set()
+
+        first_publisher = self.publisher(self.store, hook_first)
+        second_publisher = self.publisher(self.store, hook_second)
+        outcomes: dict[str, object] = {}
+
+        def run(name: str, publisher: MerchantPublisher) -> None:
+            try:
+                outcomes[name] = self.publish(publisher, photo, title=name)
+            except Exception as error:  # surfaced through the assertions below
+                outcomes[name] = error
+
+        first_thread = threading.Thread(target=run, args=("first", first_publisher))
+        second_thread = threading.Thread(target=run, args=("second", second_publisher))
+        first_thread.start()
+        self.assertTrue(first_insert_reached.wait(10), "first publication never started")
+        second_thread.start()
+        first_thread.join(20)
+        second_thread.join(20)
+        self.assertFalse(first_thread.is_alive() or second_thread.is_alive())
+
+        created = [
+            outcome
+            for outcome in outcomes.values()
+            if is_publication(outcome) and not outcome.duplicate
+        ]
+        duplicates = [
+            outcome
+            for outcome in outcomes.values()
+            if is_publication(outcome) and outcome.duplicate
+        ]
+        self.assertEqual(len(created), 1, outcomes)
+        self.assertEqual(len(duplicates), 1, outcomes)
+        self.assertEqual(duplicates[0].item_id, created[0].item_id)
+        with CatalogRepository.open(self.database_path) as catalog:
+            scope = self.store.scope
+            self.assertEqual(catalog.item_count(scope), 1)
+            self.assertEqual(catalog.image_count(scope), 1)
+            self.assertEqual(catalog.event_count(scope), 1)
+            self.assertEqual(catalog.generations(scope).catalog, 1)
+            image = catalog.display_image(scope, created[0].item_id)
+        assert image is not None
+        stored = self.image_store.read(scope, image.sha256, image.variant)
+        self.assertEqual(hashlib.sha256(stored).hexdigest(), image.sha256)
+
+    def test_same_source_bytes_publish_independently_in_another_store(self) -> None:
+        photo = jpeg_bytes(size=(44, 30))
+        first = self.publish(self.publisher(self.store, no_hook), photo, title="first")
+        second = self.publish(self.publisher(self.other, no_hook), photo, title="second")
+        self.assertFalse(first.duplicate)
+        self.assertFalse(second.duplicate)
+        self.assertNotEqual(first.item_id, second.item_id)
+        with CatalogRepository.open(self.database_path) as catalog:
+            self.assertEqual(catalog.item_count(self.store.scope), 1)
+            self.assertEqual(catalog.item_count(self.other.scope), 1)
+            self.assertEqual(catalog.image_count(self.store.scope), 1)
+            self.assertEqual(catalog.image_count(self.other.scope), 1)
+            self.assertEqual(self.image_store.blob_count(self.store.scope), 1)
+            self.assertEqual(self.image_store.blob_count(self.other.scope), 1)
+
+
+def is_publication(outcome: object):
+    from backend.catalog.publish import PublishedItem
+
+    return isinstance(outcome, PublishedItem)
+
+
+def no_hook(phase: str, statement: str) -> None:
+    return None

@@ -79,7 +79,7 @@ existing S4 indexer: the item is browsable immediately and becomes visual-text
 searchable after one indexer run, with no further merchant action.
 
 ## Verification
-166 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+168 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -203,9 +203,11 @@ photos from some phones are rejected until ADR-0004 is amended; the request cap 
 byte cap plus multipart framing. Publishing is limited to live stores: the demo store
 keeps its mandatory CC0/not-for-sale wording and exposes no publish form, so merchant
 merchandise is never mixed into the illustrative demo. Duplicate detection is a
-store-scoped `images.source_sha256` check inside the publication transaction; two
-simultaneous identical uploads could still create two items because S7 deliberately did
-not add a unique constraint to S3's schema. Publishing bumps the S4 catalog generation
+store-scoped `images.source_sha256` check inside the publication transaction, backed by
+the unique `images_store_source_idx` index on `(store_id, source_sha256, variant)` added
+in migration 0006, so two simultaneous identical uploads resolve to one item, one image,
+one publish event and one generation bump, with one caller receiving the duplicate
+outcome. Publishing bumps the S4 catalog generation
 (which invalidates the storefront snapshot and vector cache) and leaves the
 represented-catalog version string unchanged, because search telemetry and the demo
 import bind to that version. No merchant-labor measurement was recorded for S7, so

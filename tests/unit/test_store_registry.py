@@ -38,6 +38,7 @@ class MigrationTest(unittest.TestCase):
                     "0003_embeddings_and_index_generations.sql",
                     "0004_telemetry_events.sql",
                     "0005_merchant_auth.sql",
+                    "0006_image_source_uniqueness.sql",
                 )
                 self.assertEqual(applied, migrations)
                 self.assertEqual(
@@ -66,6 +67,13 @@ class MigrationTest(unittest.TestCase):
                     tables,
                 )
                 self.assertEqual(connection.execute("PRAGMA foreign_keys").fetchone()[0], 1)
+                indexes = {
+                    row["name"]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'index'"
+                    )
+                }
+                self.assertIn("images_store_source_idx", indexes)
                 self.assertEqual(
                     connection.execute("PRAGMA journal_mode").fetchone()[0].lower(), "wal"
                 )

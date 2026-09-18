@@ -787,6 +787,16 @@ class CatalogRepository:
         except DuplicateImageError:
             raise
         except sqlite3.IntegrityError as error:
+            # The early lookup above is a fast path; this is the race-safe backstop.
+            # A concurrent identical publication committed first, so report the
+            # existing item exactly like the sequential duplicate case.
+            duplicate = connection.execute(
+                "SELECT item_id FROM images WHERE store_id = ? AND source_sha256 = ? "
+                "AND variant = ?",
+                (scope.store_id, image.source_sha256, image.variant),
+            ).fetchone()
+            if duplicate is not None:
+                raise DuplicateImageError(str(duplicate["item_id"])) from error
             raise CatalogConflictError(f"could not publish item {item_id}") from error
         return event_id
 

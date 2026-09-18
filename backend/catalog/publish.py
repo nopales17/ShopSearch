@@ -25,7 +25,7 @@ from backend.catalog.store_repository import (
 from backend.media.image_store import DISPLAY_VARIANT, ImageStore
 from backend.media.uploads import validate_upload
 from contracts.catalog import CaptureTimeSource, EvidenceRef, ObservationSource
-from contracts.store import Store
+from contracts.store import Store, StoreScope
 
 UNKNOWN_TITLE = "Untitled item"
 UNKNOWN_CATEGORY = "Uncategorized"
@@ -149,14 +149,27 @@ class MerchantPublisher:
                 actor=merchant_id,
             )
         except DuplicateImageError as duplicate:
-            if created_blob:
-                self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
+            self._discard_unreferenced_derivative(scope, display_sha256, duplicate.item_id)
             return PublishedItem(duplicate.item_id, duplicate=True)
         except Exception:
             if created_blob:
                 self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
             raise
         return PublishedItem(item_id, capture_time=capture_time, capture_time_source=capture_source)
+
+    def _discard_unreferenced_derivative(
+        self, scope: StoreScope, display_sha256: str, existing_item_id: str
+    ) -> None:
+        """Keep stored bytes when the represented item already serves these bytes.
+
+        A losing concurrent publication must not delete the winner's blob, so only an
+        address no represented item uses is removed.
+        """
+
+        existing = self._catalog.display_image(scope, existing_item_id)
+        if existing is not None and existing.sha256 == display_sha256:
+            return
+        self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
 
     def _capture_provenance(
         self,
