@@ -285,7 +285,8 @@ and hash 404ed on store B, store A's cookie yielded no identity on store B, an u
 and an unprovisioned hostname returned the store-free 404, store B's session with store
 A's CSRF token was rejected, and store B's session could not edit or hide a store-A-only
 item, leaving both stores' item/image/event counts and generation pairs unchanged. The
-S9 commit f9f8f67 passed both the 3.11 and 3.12 CI jobs.
+S9 commit f9f8f67 passed both the 3.11 and 3.12 CI jobs, and the S10 commit c173394
+passed both as well.
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
