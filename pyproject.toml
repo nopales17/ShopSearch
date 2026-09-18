@@ -23,6 +23,6 @@ check_untyped_defs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["torch.*", "transformers.*", "PIL.*", "huggingface_hub.*"]
+module = ["torch.*", "transformers.*", "PIL.*", "huggingface_hub.*", "waitress.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
