@@ -58,6 +58,8 @@ class StoreConfiguration:
     display_name: str
     currency: str
     timezone: str
+    # Catalog-owned public claim wording, supplied by the store record (ADR-0005 §7).
+    public_claim: str = "Demo/test fixture; no physical availability asserted"
 
 
 @dataclass(frozen=True)

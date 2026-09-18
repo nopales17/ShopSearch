@@ -5,6 +5,7 @@ from apps.web.server import ROOT
 from backend.catalog.pitch import load_pitch_catalog
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
+from backend.stores.demo import demo_store_configuration
 from contracts.search import SearchQuery
 from tests.unit.test_pitch import StubEncoder
 
@@ -43,7 +44,7 @@ class QueryPlanTest(unittest.TestCase):
             parse_price("cheapest most expensive")
 
     def test_deterministic_sort_composition_and_ties(self) -> None:
-        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
         service = MultimodalSearchService(
             catalog, ROOT / "data/pitch/image_index.json", StubEncoder()
         )

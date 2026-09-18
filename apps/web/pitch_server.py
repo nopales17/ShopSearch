@@ -17,22 +17,33 @@ from apps.web.server import ROOT, STATIC_ROOT, WebApplication
 from backend.adapters.clip import ClipEncoder
 from backend.catalog.pitch import load_pitch_catalog
 from backend.catalog.repository import LoadedCatalog
+from backend.platform.paths import (
+    DEFAULT_DATABASE_PATH,
+    DEFAULT_DEMO_STORE_PATH,
+)
 from backend.search.multimodal import MultimodalSearchService, TextEncoder
 from backend.search.price import parse_price
+from backend.stores.repository import StoreRepository
+from backend.stores.seed import seed_store
 from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
 from contracts.search import SearchQuery, SearchService
+from contracts.store import Store
 from contracts.telemetry import EventType
 
 
 class PitchApplication(WebApplication):
     def __init__(
-        self, catalog: LoadedCatalog, telemetry: JsonlTelemetryStore, search: SearchService
+        self,
+        catalog: LoadedCatalog,
+        telemetry: JsonlTelemetryStore,
+        search: SearchService,
+        store: Store,
+        index_path: Path,
     ) -> None:
         super().__init__(catalog, telemetry)
         self.search = search
-        self.index_sha256 = hashlib.sha256(
-            (ROOT / "data/pitch/image_index.json").read_bytes()
-        ).hexdigest()
+        self.store = store
+        self.index_sha256 = hashlib.sha256(index_path.read_bytes()).hexdigest()
 
     def event(
         self, kind: EventType, session: str, payload: dict[str, Any], search_id: str | None = None
@@ -81,12 +92,12 @@ class PitchApplication(WebApplication):
         content_type = "text/html; charset=utf-8"
         if parsed.path == "/":
             self.event(EventType.HOMEPAGE_VIEWED, session, {})
-            body = views.home(self.catalog)
+            body = views.home(self.catalog, self.store)
         elif parsed.path == "/credits":
-            body = views.credits(self.catalog)
+            body = views.credits(self.catalog, self.store)
         elif parsed.path == "/catalog":
             self.event(EventType.CATALOG_OPENED, session, {})
-            body = views.catalog_page(self.catalog, query)
+            body = views.catalog_page(self.catalog, self.store, query)
         elif parsed.path == "/api/search":
             category = parameters.get("category", [""])[0]
             if category and category not in {i.category for i in self.catalog.items}:
@@ -136,7 +147,7 @@ class PitchApplication(WebApplication):
                 )
             elapsed_ms = (time.perf_counter() - start) * 1000
             body = json.dumps(
-                views.result_payload(self.catalog, items, query, search_id, elapsed_ms)
+                views.result_payload(self.catalog, self.store, items, query, search_id, elapsed_ms)
             )
             content_type = "application/json"
         elif parsed.path.startswith("/items/"):
@@ -145,6 +156,7 @@ class PitchApplication(WebApplication):
                 status, body = (
                     HTTPStatus.NOT_FOUND,
                     views.page(
+                        self.store,
                         "Not found",
                         '<main class="credits"><h1>Object not found.</h1><a href="/catalog">Explore the collection →</a></main>',
                     ),
@@ -154,7 +166,7 @@ class PitchApplication(WebApplication):
                 self.event(
                     EventType.ITEM_OPENED, session, self.catalog.public_snapshot(item), search_id
                 )
-                body = views.item_page(item, query, search_id)
+                body = views.item_page(item, self.store, query, search_id)
         elif parsed.path == "/api/demo-action":
             item = self.catalog.get(parameters.get("item_id", [""])[0])
             kind = parameters.get("kind", [""])[0]
@@ -175,22 +187,33 @@ class PitchApplication(WebApplication):
 
 
 def build_pitch_application(
-    telemetry_path: Path | None = None, encoder: TextEncoder | None = None
+    store: Store,
+    telemetry_path: Path | None = None,
+    encoder: TextEncoder | None = None,
 ) -> PitchApplication:
-    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+    if store.catalog_path is None:
+        raise ValueError(f"store {store.store_id} has no catalog configured")
+    catalog_path = ROOT / store.catalog_path
+    catalog = load_pitch_catalog(catalog_path, store.configuration())
     encoder = encoder or ClipEncoder()
-    service = MultimodalSearchService(catalog, ROOT / "data/pitch/image_index.json", encoder)
+    index_path = catalog_path.parent / "image_index.json"
+    service = MultimodalSearchService(catalog, index_path, encoder)
     encoder.text("glass")  # Warm inference at startup, not from the fixed query list.
     telemetry = JsonlTelemetryStore(
         telemetry_path or ROOT / "data/local/pitch-telemetry.jsonl", traffic="pitch_demo"
     )
-    return PitchApplication(catalog, telemetry, service)
+    return PitchApplication(catalog, telemetry, service, store, index_path)
 
 
 def create_pitch_server(
-    port: int = 8000, telemetry_path: Path | None = None, encoder: TextEncoder | None = None
+    port: int = 8000,
+    telemetry_path: Path | None = None,
+    encoder: TextEncoder | None = None,
+    database_path: Path | None = None,
 ) -> ThreadingHTTPServer:
-    application = build_pitch_application(telemetry_path, encoder)
+    with StoreRepository.open(database_path or DEFAULT_DATABASE_PATH) as repository:
+        store = seed_store(repository, DEFAULT_DEMO_STORE_PATH)
+        application = build_pitch_application(store, telemetry_path, encoder)
     return ThreadingHTTPServer(("127.0.0.1", port), application.handler())
 
 

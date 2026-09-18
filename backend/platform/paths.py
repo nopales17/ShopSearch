@@ -1,0 +1,10 @@
+"""Repository paths for the initial deployment implementations."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DATABASE_PATH = REPOSITORY_ROOT / "data" / "local" / "shopsearch.sqlite3"
+DEFAULT_DEVELOPMENT_HOSTS_PATH = REPOSITORY_ROOT / "config" / "development_hosts.json"
+DEFAULT_DEMO_STORE_PATH = REPOSITORY_ROOT / "data" / "stores" / "pitch-demo.json"

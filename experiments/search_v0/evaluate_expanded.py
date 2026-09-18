@@ -13,6 +13,7 @@ from backend.adapters.clip import ROOT, ClipEncoder
 from backend.catalog.pitch import load_pitch_catalog
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
+from backend.stores.demo import demo_store_configuration
 from contracts.search import SearchQuery
 from experiments.search_v0.evaluate_pitch import quality
 
@@ -38,7 +39,7 @@ def freeze() -> None:
     path = DIRECTORY / "expanded_evaluation.json"
     if path.exists():
         raise ValueError("expanded judgments already frozen; do not overwrite")
-    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
     original = json.loads((DIRECTORY / "pitch_evaluation.json").read_text())
     manifest = json.loads((ROOT / "data/pitch/expansion_manifest.json").read_text())
     for case in original["queries"]:
@@ -89,7 +90,7 @@ def main() -> None:
     output = DIRECTORY / "expanded_results.json"
     if output.exists():
         raise ValueError("results exist; this bounded experiment must not overwrite history")
-    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
     evaluation = json.loads((DIRECTORY / "expanded_evaluation.json").read_text())
     assert evaluation["catalog_version"] == catalog.version
     original = json.loads((DIRECTORY / "pitch_evaluation.json").read_text())

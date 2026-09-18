@@ -11,11 +11,12 @@ from PIL import Image
 
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION, ROOT, ClipEncoder
 from backend.catalog.pitch import load_pitch_catalog
+from backend.stores.demo import demo_store_configuration
 
 
 def main() -> None:
     start = time.perf_counter()
-    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+    catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
     encoder = ClipEncoder()
     vectors = []
     for start_index in range(0, len(catalog.items), 8):

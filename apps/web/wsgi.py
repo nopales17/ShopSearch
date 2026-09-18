@@ -1,9 +1,10 @@
-"""Production WSGI adapter for the photographic pitch storefront.
+"""Production WSGI adapter for the store-scoped photographic storefront.
 
 ADR-0004 selects a Flask application served by Waitress as the production HTTP
-adapter. The adapter reuses the existing P1 composition and handler dispatch so that
-S1 changes transport only: routes, view functions, response headers, cookies, telemetry
-and stored data keep their existing behavior.
+adapter. The adapter reuses the existing P1 composition and handler dispatch, so
+routes, view functions, response headers, cookies and telemetry keep their behavior.
+S2 makes it resolve each request's normalized Host to exactly one store through the
+registry; an unregistered host gets a 404 that carries no store data.
 """
 
 from __future__ import annotations
@@ -21,7 +22,16 @@ import waitress
 from flask import Flask, Response, request
 
 from apps.web.pitch_server import PitchApplication, build_pitch_application
+from backend.platform.paths import (
+    DEFAULT_DATABASE_PATH,
+    DEFAULT_DEMO_STORE_PATH,
+    DEFAULT_DEVELOPMENT_HOSTS_PATH,
+)
 from backend.search.multimodal import TextEncoder
+from backend.stores.repository import StoreRepository
+from backend.stores.resolver import HostResolver, load_development_hosts
+from backend.stores.seed import seed_store
+from contracts.store import StoreScope
 
 
 def _request_target(environ: Mapping[str, Any]) -> str:
@@ -124,18 +134,62 @@ def _dispatch(application: PitchApplication, environ: Mapping[str, Any]) -> Resp
     )
 
 
-def create_pitch_app(
-    telemetry_path: Path | None = None, encoder: TextEncoder | None = None
-) -> Flask:
-    """Return the Flask application serving the existing pitch storefront."""
+def _plain(status: HTTPStatus, body: str) -> Response:
+    """A response for an unresolved host, carrying no store data and no cookie."""
 
-    application = build_pitch_application(telemetry_path, encoder)
+    response = Response(body, status=status, content_type="text/plain; charset=utf-8")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def create_pitch_app(
+    telemetry_path: Path | None = None,
+    encoder: TextEncoder | None = None,
+    database_path: Path | None = None,
+    development_hosts_path: Path | None = None,
+) -> Flask:
+    """Return the Flask application serving host-resolved storefronts.
+
+    Every request resolves its normalized `Host` through the store registry to
+    exactly one store. An unregistered hostname returns 404 with no store data.
+    `config/development_hosts.json` is the explicit local host-to-store map; it
+    contains no wildcard, and an unknown host never falls back to a store.
+    """
+
+    repository = StoreRepository.open(database_path or DEFAULT_DATABASE_PATH)
+    seed_store(repository, DEFAULT_DEMO_STORE_PATH)
+    development_hosts = load_development_hosts(
+        DEFAULT_DEVELOPMENT_HOSTS_PATH if development_hosts_path is None else development_hosts_path
+    )
+    resolver = HostResolver(repository, development_hosts)
+    applications: dict[str, PitchApplication] = {}
+    application_lock = threading.Lock()
+
+    def application_for(scope: StoreScope) -> PitchApplication | None:
+        with application_lock:
+            existing = applications.get(scope.store_id)
+            if existing is not None:
+                return existing
+            store = repository.find_store(scope)
+            if store is None or store.catalog_path is None:
+                return None
+            application = build_pitch_application(store, telemetry_path, encoder)
+            applications[scope.store_id] = application
+            return application
+
     app = Flask(__name__, static_folder=None)
     app.url_map.merge_slashes = False
 
     @app.route("/", defaults={"path": ""}, methods=["GET"])
     @app.route("/<path:path>", methods=["GET"])
     def dispatch(path: str) -> Response:
+        scope = resolver.resolve(request.environ.get("HTTP_HOST"))
+        if scope is None:
+            return _plain(HTTPStatus.NOT_FOUND, "Not found")
+        application = application_for(scope)
+        if application is None:
+            return _plain(HTTPStatus.NOT_FOUND, "Not found")
         return _dispatch(application, request.environ)
 
     return app
@@ -184,10 +238,16 @@ def create_pitch_server(
     telemetry_path: Path | None = None,
     encoder: TextEncoder | None = None,
     host: str = "127.0.0.1",
+    database_path: Path | None = None,
+    development_hosts_path: Path | None = None,
 ) -> WaitressServer:
     """Return a bound Waitress server for the pitch application."""
 
-    return WaitressServer(create_pitch_app(telemetry_path, encoder), host=host, port=port)
+    return WaitressServer(
+        create_pitch_app(telemetry_path, encoder, database_path, development_hosts_path),
+        host=host,
+        port=port,
+    )
 
 
 def main() -> None:

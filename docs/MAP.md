@@ -5,9 +5,12 @@ shopsearch/
 ├── .github/workflows/ci.yml   Python 3.11/3.12 checks
 ├── AGENTS.md                 agent operating constraints
 ├── Makefile                  local run/test/check commands
+├── requirements.txt          pinned Flask/Waitress production adapter
 ├── requirements-dev.txt      pinned lint/type tools
 ├── requirements-pitch.txt    optional pinned local CLIP runtime
 ├── README.md                 project entrypoint
+├── config/
+│   └── development_hosts.json explicit local host-to-store map (no wildcard)
 ├── docs/
 │   ├── CHARTER.md            durable product thesis + boundaries
 │   ├── PRODUCT.md            Customer Zero release specification + pending inputs
@@ -22,12 +25,15 @@ shopsearch/
 │   └── adr/                  architecture decision records
 ├── contracts/
 │   ├── catalog.py            item/observation/availability contracts
+│   ├── store.py              StoreScope + store record/presentation contracts
 │   ├── search.py             query/result contracts
 │   ├── telemetry.py          immutable interaction-event contracts
 │   └── decision.py           future evidence-aware recommendation contract
 ├── backend/
+│   ├── platform/             persistence layer: connection factory, migrations, paths
 │   ├── domain/               pure domain logic
 │   ├── catalog/              separate fixture and photographic-demo validation/loading
+│   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
 │   ├── search/               placeholder + CLIP ranking; deterministic price parser
 │   ├── ingestion/            ingestion adapters
 │   ├── telemetry/            local append-only JSONL persistence + read-only report
@@ -37,7 +43,8 @@ shopsearch/
 │   └── web/                  Flask/Waitress + legacy stdlib HTTP; fixture + pitch UI
 ├── data/
 │   ├── demo/                 explicitly non-production fixture catalog + store config
-│   └── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
+│   ├── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
+│   └── stores/               founder-authored store records (demo store seed)
 ├── tools/                    photo preparation, mechanical expansion and offline image-index build
 ├── experiments/
 │   ├── search_v0/            frozen P1 + separate expanded proxy rubric, evaluators/results/protocols
@@ -49,7 +56,8 @@ shopsearch/
 ```
 
 `backend/catalog/repository.py` validates fixture records; `pitch.py` validates the
-separate permitted photo catalog and provenance. `backend/search/placeholder.py`
+separate permitted photo catalog and provenance against the resolved store.
+`backend/search/placeholder.py`
 retains Issue #1 token ranking. `multimodal.py` ranks precomputed image vectors using
 the local CLIP adapter; `price.py` enforces supported price phrases independently.
 `backend/telemetry/jsonl_store.py` preserves correlated append-only events with distinct
@@ -61,12 +69,27 @@ superseded stdlib entry point; `pitch_views.py` and static pitch CSS/JS provide 
 represents Customer Zero inventory. ADR-0003 explains the pitch extension; ADR-0004
 selects the WSGI runtime.
 
+`backend/platform/db.py` owns SQLite connections (WAL, `foreign_keys`), the versioned
+forward-only migration runner and migration bookkeeping in
+`backend/platform/migrations/`. `backend/stores/` owns the store registry: the typed
+store record and `StoreScope` (`contracts/store.py`), validation including the
+mandatory demo disclosures (`validation.py`), founder-authored config loading
+(`config.py`), SQL access (`repository.py`), hostname normalization and resolution
+(`hostname.py`, `resolver.py`), idempotent seeding (`seed.py`) and the
+store-provisioning CLI (`cli.py`). `data/stores/pitch-demo.json` is the committed
+Form & Field store record; `config/development_hosts.json` is the explicit local
+host-to-store map. `apps/web/wsgi.py` resolves each request's normalized Host to one
+store, returns 404 with no store data for unregistered hosts, and dispatches to that
+store's storefront application.
+
 `docs/SLICES.md` owns the ordered implementation slices for the store-scoped platform
 transition and their acceptance criteria; `docs/adr/0004-production-runtime.md` and
 `docs/adr/0005-store-scoped-platform.md` own the runtime and boundary decisions it
-implements. S1 is implemented: the photographic demo is served by the Flask/Waitress
-adapter. S2-S10 are not implemented; the tree otherwise still describes the Issue #1
-fixture slice and the P1 pitch demo as they actually exist.
+implements. S1 and S2 are implemented: the photographic demo is served by the
+Flask/Waitress adapter, and its store record plus hostname resolution come from the
+SQLite store registry. S3-S10 are not implemented; the catalog, media, embeddings and
+telemetry remain JSON/JSONL fixtures loaded from store configuration, and only the
+demo store has a catalog.
 
 `backend/telemetry/report.py` reads a persisted local event JSONL and prints
 deterministic demo funnel counts with explicit denominators. It does not infer

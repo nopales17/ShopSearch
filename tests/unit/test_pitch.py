@@ -11,6 +11,7 @@ from apps.web.server import ROOT
 from backend.catalog.pitch import load_pitch_catalog
 from backend.search.multimodal import MultimodalSearchService
 from backend.search.price import parse_price
+from backend.stores.demo import demo_store_configuration
 from contracts.search import SearchQuery
 
 
@@ -30,7 +31,7 @@ class PitchBoundaryTest(unittest.TestCase):
                 (ROOT / "experiments/search_v0/pitch_evaluation.json").read_bytes()
             ).hexdigest(),
         )
-        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
         self.assertEqual(len(catalog.items), 90)
         self.assertEqual(
             index["expanded_evaluation_sha256"],
@@ -62,7 +63,7 @@ class PitchBoundaryTest(unittest.TestCase):
         self.assertFalse(parse_price("up to $50 under $50").inclusive)
 
     def test_search_enforces_constraints_and_does_not_use_tags(self) -> None:
-        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
         service = MultimodalSearchService(
             catalog, ROOT / "data/pitch/image_index.json", StubEncoder()
         )
@@ -81,7 +82,7 @@ class PitchBoundaryTest(unittest.TestCase):
         self.assertEqual(before.results, service.search(query).results)
 
     def test_stale_index_is_rejected(self) -> None:
-        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
+        catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json", demo_store_configuration())
         with tempfile.TemporaryDirectory() as directory:
             index = json.loads((ROOT / "data/pitch/image_index.json").read_text())
             index["catalog_version"] = "wrong"

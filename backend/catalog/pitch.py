@@ -23,20 +23,22 @@ from contracts.catalog import (
 )
 
 
-def load_pitch_catalog(path: Path) -> LoadedCatalog:
+def load_pitch_catalog(path: Path, store: StoreConfiguration) -> LoadedCatalog:
     document = json.loads(path.read_text())
     if (
         document.get("dataset_kind") != "pitch_demo"
         or document.get("not_customer_zero_inventory") is not True
     ):
         raise CatalogValidationError("explicit pitch-demo scope required")
+    if document.get("store_id") != store.store_id:
+        raise CatalogValidationError("catalog store scope conflicts with the resolved store")
     records = document.get("items", [])
     if not 20 <= len(records) <= 100:
         raise CatalogValidationError("pitch demo requires 20–100 permitted photographs")
     items, observations = [], []
     for record in records:
         item_id = _identifier(record, "item_id")
-        if record.get("demo") is not True or record.get("store_id") != "pitch-demo":
+        if record.get("demo") is not True or record.get("store_id") != store.store_id:
             raise CatalogValidationError("pitch record scope mismatch")
         if record.get("license") != "CC0" or not record.get("source_url", "").startswith(
             "https://clevelandart.org/art/"
@@ -71,7 +73,7 @@ def load_pitch_catalog(path: Path) -> LoadedCatalog:
         items.append(
             CatalogItem(
                 item_id=item_id,
-                store_id="pitch-demo",
+                store_id=store.store_id,
                 title=_required_string(record, "title"),
                 category=_required_string(record, "category"),
                 price=price,
@@ -86,7 +88,7 @@ def load_pitch_catalog(path: Path) -> LoadedCatalog:
         raise CatalogValidationError("duplicate item or photo")
     version = "pitch-v1:" + hashlib.sha256(path.read_bytes()).hexdigest()
     return LoadedCatalog(
-        StoreConfiguration("pitch-demo", "FORM & FIELD", "USD", "America/Los_Angeles"),
+        store,
         version,
         tuple(items),
         tuple(observations),

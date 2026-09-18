@@ -20,7 +20,12 @@ class PitchHttpTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
         self.log = Path(self.directory.name) / "pitch.jsonl"
-        self.server = create_pitch_server(port=0, telemetry_path=self.log, encoder=StubEncoder())
+        self.server = create_pitch_server(
+            port=0,
+            telemetry_path=self.log,
+            encoder=StubEncoder(),
+            database_path=Path(self.directory.name) / "store.sqlite3",
+        )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.url = f"http://127.0.0.1:{self.server.server_port}"

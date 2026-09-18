@@ -56,11 +56,8 @@ class LoadedCatalog:
             "title": item.title,
             "price": str(item.price) if item.price is not None else None,
             "currency": self.store.currency,
-            "public_claim": (
-                "Curated photo demo; illustrative price; not store inventory"
-                if self.dataset_kind == "pitch_demo"
-                else "Demo/test fixture; no physical availability asserted"
-            ),
+            # Store-owned public claim wording (ADR-0005 §7), never a code literal.
+            "public_claim": self.store.public_claim,
             "observations": [
                 {
                     "source_id": ref.source_id,
