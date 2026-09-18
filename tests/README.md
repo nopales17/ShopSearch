@@ -6,11 +6,12 @@
 
 Phase 1 should include a fixed retrieval evaluation set with human-authored expected relevance.
 
-Issue #1 and P1 use the standard-library unittest runner. `make test` runs 26 tests,
-including real loopback HTTP journeys that follow rendered links, restart persistence,
-foreign-session/invalid attribution rejection, fixture validation, explicit service
-constraints, concurrent/idempotent event writes and the read-only demo funnel report.
-Fixtures never assert real stock.
+Issue #1 and P1 use the standard-library unittest runner. `make test` runs the full
+suite, including real loopback HTTP journeys under the Flask/Waitress storefront
+adapter, link/rendered-page checks, restart persistence, foreign-session/invalid
+attribution rejection, fixture validation, explicit service constraints,
+concurrent/idempotent event writes and the read-only demo funnel report. Fixtures never
+assert real stock.
 
 After installing requirements-dev.txt, `make check PYTHON=.venv/bin/python` also
 compiles modules, checks Ruff lint/format and runs mypy on application/contracts.
@@ -19,5 +20,7 @@ These tests establish implementation behavior, not retrieval quality or market e
 
 P1 adds permitted-photo/hash/index validation, strict/inclusive/unknown price checks
 and real HTTP photo/search/detail/simulated-action journeys. HTTP tests inject a stub
-encoder so CI does not download a model. `make pitch-eval` runs actual pinned CLIP
-against the frozen relevance judgments separately; see E-001 and PITCH_PROTOCOL.
+encoder so CI does not download a model. S1 adds storefront route, response-header,
+session-cookie and legacy-vs-WSGI byte-parity checks. `make pitch-eval` runs actual
+pinned CLIP against the frozen relevance judgments separately; see E-001 and
+PITCH_PROTOCOL.

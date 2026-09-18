@@ -10,7 +10,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode
 from urllib.request import HTTPCookieProcessor, build_opener
 
-from apps.web.pitch_server import create_pitch_server
+from apps.web.wsgi import create_pitch_server
 from backend.telemetry.jsonl_store import JsonlTelemetryStore
 from backend.telemetry.report import summarize
 from tests.unit.test_pitch import StubEncoder

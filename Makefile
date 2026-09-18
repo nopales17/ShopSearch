@@ -1,13 +1,16 @@
 PYTHON ?= python3
-.PHONY: run pitch pitch-setup pitch-eval report test check
+.PHONY: run serve pitch pitch-setup pitch-eval report test check
 
 run:
 	$(PYTHON) -m apps.web.server
 
-pitch:
-	$(PYTHON) -m apps.web.pitch_server
+serve:
+	$(PYTHON) -m apps.web.wsgi
+
+pitch: serve
 
 pitch-setup:
+	$(PYTHON) -m pip install -r requirements.txt
 	$(PYTHON) -m pip install -r requirements-pitch.txt
 	$(PYTHON) -m backend.adapters.clip
 

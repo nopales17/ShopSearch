@@ -9,14 +9,21 @@ Issue #1 remains runnable locally. P1's generic pitch has received the authorize
 PRODUCT defines the release; HYPOTHESES records dated strategic claims and gates.
 Issue #1 added concrete store/fixture and response/event correlation fields to contracts.
 ADR-0002 records the local standard-library runtime and single-writer JSONL limits,
-preserving ADR-0001. ADR-0003 records P1's optional local model adapter; E-001 records its limited retrieval findings.
+preserving ADR-0001 and continuing to describe the Issue #1 fixture slice.
+ADR-0003 records P1's optional local model adapter; E-001 records its limited retrieval
+findings. S1 moved the photographic storefront to the ADR-0004 Flask/Waitress HTTP
+adapter without changing routes, headers, cookies, views, catalog loading, search or
+telemetry storage.
 
 ## Verification
-26 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
-restart persistence, invalid/foreign attribution rejection, catalog validation and
-concurrent duplicate-safe event writes. Compilation, Ruff lint/format and mypy pass
-on Python 3.12. Browser form submission and item detail were manually checked.
-CI uses the same checks on Python 3.11/3.12; remote CI has not been run in this pass.
+30 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+restart persistence, invalid/foreign attribution rejection, catalog validation,
+concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
+parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
+Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
+item detail were manually checked. The documented `make serve` target was smoke-tested
+with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
+uses the same checks on Python 3.11/3.12; remote CI has not been run in this pass.
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
@@ -36,11 +43,13 @@ ascending/descending price sorting. Semantic price sorts order the 12 closest el
 CLIP candidates, visibly disclosed; price-only sorts consider all known-price items.
 Unknown prices cannot satisfy price-dependent queries. No relevance threshold was added.
 
-Limits: loopback-only local HTTP server; one process per JSONL file; linear log scans;
-page reloads count as new interactions. Token ranking returns up to 12 records even
-with no overlap. Explicit service price/category filters work; natural-language
-price parsing and customer filters are now available in P1's separate pitch mode. Fixture source records are
-synthetic, resolvable observations; catalog-owned public snapshots assert no stock.
+Limits: loopback-only local Waitress/WSGI storefront (with the legacy stdlib fixture
+server retained for Issue #1); one process per JSONL file; linear log scans; page
+reloads count as new interactions. Token ranking returns up to 12 records even with no
+overlap. Explicit service price/category filters work; natural-language price parsing
+and customer filters are now available in P1's separate pitch mode. Fixture source
+records are synthetic, resolvable observations; catalog-owned public snapshots assert
+no stock.
 Funnel reporting covers persisted local demo traffic only; public-telemetry retention,
 access and notice decisions remain unresolved.
 
@@ -60,15 +69,17 @@ rather than static SQL inspection; and SQLite, local blob storage, Waitress and 
 the selected initial deployment implementations behind adapters, not permanent product
 architecture. `adr/0004-production-runtime.md` and `adr/0005-store-scoped-platform.md`
 record the architecture; `docs/SLICES.md` records the implementation sequence and
-acceptance criteria. Nothing in S1-S10 is implemented yet.
+acceptance criteria. S1 is implemented: the photographic storefront is served by the
+Flask/Waitress adapter in `apps/web/wsgi.py`, preserving the standard-library adapter's
+behavior and tests. S2-S10 are not implemented yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S1 in `docs/SLICES.md`: move the existing storefront onto the production HTTP adapter
-described in ADR-0004, preserving behavior exactly. Execute only S1; its acceptance
-criteria and non-goals are in the slice register, and the escalation rules in AGENTS apply.
+S2 in `docs/SLICES.md`: introduce the persistence substrate, store registry and hostname
+resolution. Execute only S2; its acceptance criteria and non-goals are in the slice
+register, and the escalation rules in AGENTS apply. Do not pull later slices forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

@@ -174,9 +174,9 @@ class PitchApplication(WebApplication):
         self._respond(request, status, content_type, body, fresh, session)
 
 
-def create_pitch_server(
-    port: int = 8000, telemetry_path: Path | None = None, encoder: TextEncoder | None = None
-) -> ThreadingHTTPServer:
+def build_pitch_application(
+    telemetry_path: Path | None = None, encoder: TextEncoder | None = None
+) -> PitchApplication:
     catalog = load_pitch_catalog(ROOT / "data/pitch/catalog.json")
     encoder = encoder or ClipEncoder()
     service = MultimodalSearchService(catalog, ROOT / "data/pitch/image_index.json", encoder)
@@ -184,7 +184,13 @@ def create_pitch_server(
     telemetry = JsonlTelemetryStore(
         telemetry_path or ROOT / "data/local/pitch-telemetry.jsonl", traffic="pitch_demo"
     )
-    application = PitchApplication(catalog, telemetry, service)
+    return PitchApplication(catalog, telemetry, service)
+
+
+def create_pitch_server(
+    port: int = 8000, telemetry_path: Path | None = None, encoder: TextEncoder | None = None
+) -> ThreadingHTTPServer:
+    application = build_pitch_application(telemetry_path, encoder)
     return ThreadingHTTPServer(("127.0.0.1", port), application.handler())
 
 

@@ -44,27 +44,29 @@ of Art's CC0 collection. These are museum objects, not goods offered for sale or
 prospective shop's inventory. The site
 discloses manual curation and illustrative prices. Call/Directions are simulated.
 
-Use Python 3.11/3.12. First setup installs the optional pinned CLIP runtime and
-downloads model weights (several hundred MB; network required). Photos and their
+Use Python 3.11/3.12. First setup installs the pinned WSGI runtime, the optional pinned
+CLIP runtime, and model weights (several hundred MB; network required). Photos and their
 precomputed vectors are already committed. Subsequent inference works locally.
 
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 make pitch-setup PYTHON=.venv/bin/python
-make pitch PYTHON=.venv/bin/python
+make serve PYTHON=.venv/bin/python
 ```
 
 Open `http://127.0.0.1:8000`. Follow “See What's In Store,” then try “small blue one
 under $50,” “simple clear one,” or “colorful.” Price ceilings are deterministic;
 unknown prices are excluded. CLIP ranks image similarity without an LLM. Startup
-warms text inference. This remains a local demo, not a publicly hosted website.
+warms text inference. The storefront is served by the Flask application in
+`apps/web/wsgi.py` under Waitress, the production HTTP adapter selected in ADR-0004;
+`make pitch` remains an alias. This remains a local demo, not a publicly hosted website.
 
 Pitch events persist separately to `data/local/pitch-telemetry.jsonl` with
 `pitch_demo` classification and store/session/search correlation. For another port/log:
 
 ```sh
-.venv/bin/python -m apps.web.pitch_server --port 8018 --telemetry-path /tmp/pitch.jsonl
+.venv/bin/python -m apps.web.wsgi --port 8018 --telemetry-path /tmp/pitch.jsonl
 make pitch-eval PYTHON=.venv/bin/python
 make report PYTHON=.venv/bin/python
 make check PYTHON=.venv/bin/python
@@ -96,8 +98,10 @@ Open `http://127.0.0.1:8000`. Events persist to `data/local/telemetry.jsonl`, wh
 python3 -m apps.web.server --telemetry-path /tmp/shopsearch-telemetry.jsonl
 ```
 
-Requires Python 3.11+. The fixture mode has no third-party runtime dependencies. Install
-development-only lint/type checkers once, then run the same checks as CI:
+Requires Python 3.11+. The Issue #1 fixture slice itself has no third-party runtime
+dependencies; the photographic storefront and full test suite use the pinned
+Flask/Waitress runtime in `requirements.txt`. Install the development checks once, then
+run the same checks as CI:
 
 ```sh
 python3 -m venv .venv
@@ -105,9 +109,9 @@ python3 -m venv .venv
 make check PYTHON=.venv/bin/python
 ```
 
-`make test` runs the standard-library unit and HTTP acceptance suite without extra
-packages. `make check` adds compilation, Ruff lint/format checks and mypy. CI is
-configured for Python 3.11 and 3.12; a local pass does not claim a remote CI run.
+`make test` runs the unit and HTTP acceptance suite, including the WSGI storefront
+adapter. `make check` adds compilation, Ruff lint/format checks and mypy. CI is configured
+for Python 3.11 and 3.12; a local pass does not claim a remote CI run.
 
 Only one process may write a telemetry file. Events persist across restart; tests
 use temporary files. Search/item events include session/store/search IDs and catalog

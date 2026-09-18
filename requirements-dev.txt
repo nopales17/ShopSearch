@@ -1,3 +1,4 @@
-# Development checks only; the local application uses the standard library.
+-r requirements.txt
+# Development checks only; the Issue #1 fixture slice itself uses the standard library.
 ruff==0.15.0
 mypy==1.19.1
