@@ -91,7 +91,10 @@ queries still return neighbors, and manually tagged lexical search scored higher
 ## Merchant shell (local)
 
 Founder-provisioned merchant accounts sign in at `/manage/login`; `/manage` lists the
-store's items with their listing and index state and is read-only in this slice.
+store's items with their listing and index state and publishes a new item from one photo
+plus an optional price, title and category. New items are browsable immediately and
+become searchable by description after the next `make`-level indexer run
+(`.venv/bin/python -m backend.search.indexer --store-id live-store`).
 
 ```sh
 .venv/bin/python -m backend.auth.cli --store-id pitch-demo create --username alice

@@ -34,6 +34,8 @@ class ImageStore(Protocol):
 
     def exists(self, scope: StoreScope, sha256: str, variant: str) -> bool: ...
 
+    def delete(self, scope: StoreScope, sha256: str, variant: str) -> bool: ...
+
     def blob_count(self, scope: StoreScope) -> int: ...
 
 
@@ -81,6 +83,20 @@ class LocalImageStore:
 
     def exists(self, scope: StoreScope, sha256: str, variant: str) -> bool:
         return self._path(scope, sha256, variant).is_file()
+
+    def delete(self, scope: StoreScope, sha256: str, variant: str) -> bool:
+        """Remove stored bytes; used to unwind a failed publication."""
+
+        path = self._path(scope, sha256, variant)
+        if not path.is_file():
+            return False
+        path.unlink()
+        for parent in (path.parent, path.parent.parent):
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+        return True
 
     def blob_count(self, scope: StoreScope) -> int:
         root = self._root / scope.store_id

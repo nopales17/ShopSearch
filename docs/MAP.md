@@ -35,8 +35,8 @@ shopsearch/
 │   ├── platform/             persistence layer: connection factory, migrations, paths
 │   ├── domain/               pure domain logic
 │   ├── auth/                 merchant credentials, store-scoped sessions, founder CLI
-│   ├── catalog/              catalog validation/read model, store-scoped repository, demo import
-│   ├── media/                ImageStore + content-addressed local store + EXIF-free derivatives
+│   ├── catalog/              catalog repository/read model, demo import, merchant publication
+│   ├── media/                ImageStore, bounded upload validation, EXIF-free derivatives
 │   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
 │   ├── search/               ranking + price parser; embedding source/cache; indexer + CLI
 │   ├── ingestion/            ingestion adapters
@@ -132,7 +132,10 @@ stays independent of index state, and coverage is disclosed and recorded. S5 is
 implemented: platform telemetry is store-scoped and validated, with per-store reporting
 that keeps demo/fixture and merchant-self traffic out of customer denominators. S6 is
 implemented: founder-provisioned merchants, store-scoped sessions, CSRF-protected
-sign-in/out and the read-only management shell. S7-S10 are not implemented.
+sign-in/out and the management shell. S7 is implemented: authenticated photo+price
+publication into a live store, with bounded upload validation, capture provenance,
+duplicate-byte reuse and indexing handed to the existing indexer. S8-S10 are not
+implemented.
 
 S5 moves platform telemetry to the store-scoped `telemetry_events` table (indexed on
 `(store_id, search_id)` and `(store_id, occurred_at)`). `backend/telemetry/validation.py`
@@ -156,6 +159,18 @@ password arguments). `contracts/auth.py` carries `MerchantIdentity`/`MerchantSes
 `/manage/login` and `/manage/logout` shell; `apps/web/wsgi.py` resolves the store and
 then that store's merchant session, and classifies public storefront traffic from a
 valid session as `merchant_self`. `docs/CREDENTIALS.md` records operator notes.
+
+S7 adds mobile publish. `backend/media/uploads.py` bounds an upload (12 MiB), sniffs the
+decoded format (JPEG/PNG/WebP only, no HEIC), rejects a declared content type that
+contradicts the bytes, and renders through the existing EXIF-stripping derivative path.
+`backend/catalog/publish.py` coordinates validation, media writing and capture
+provenance, then calls `CatalogRepository.publish_item_with_image`, which writes the
+item, image and item event and bumps the catalog generation exactly once inside one
+transaction; a failed publication removes the derivative it wrote. `apps/web/manage.py`
+serves the authenticated `/manage/publish` form (photo with camera capture, optional
+price/title/category, capture attestation, CSRF), and `apps/web/wsgi.py` refreshes the
+cached storefront application whenever the store's catalog generation changes so a new
+item is browsable in the same request cycle.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

@@ -106,6 +106,9 @@ class StorePresentation:
         "Some objects ({excluded} of {published}) are not yet searchable by description."
     )
     coverage_browse_label: str = "Browse all objects"
+    item_description_plain: str = (
+        "A closer look at the color, texture and details that make this object distinctive."
+    )
 
 
 @dataclass(frozen=True)

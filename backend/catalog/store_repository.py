@@ -51,6 +51,14 @@ class CatalogConflictError(CatalogError):
     """Raised when the schema rejects a store-scoped catalog write."""
 
 
+class DuplicateImageError(CatalogError):
+    """Raised when this store already represents the submitted source bytes."""
+
+    def __init__(self, item_id: str) -> None:
+        super().__init__(f"source image already published as {item_id}")
+        self.item_id = item_id
+
+
 @dataclass(frozen=True)
 class ItemState:
     item_id: str
@@ -108,6 +116,21 @@ class ManagedItem:
     price: Decimal | None
     listing_state: ListingState
     index_state: IndexState
+
+
+@dataclass(frozen=True)
+class ImageAttachment:
+    """One stored image variant attached to an item."""
+
+    sha256: str
+    source_sha256: str
+    media_type: str
+    width: int
+    height: int
+    byte_size: int
+    capture_time: datetime | None
+    capture_time_source: CaptureTimeSource
+    variant: str = DISPLAY_VARIANT
 
 
 class CatalogRepository:
@@ -591,19 +614,181 @@ class CatalogRepository:
         connection = self._database.connection()
         now = utc_now()
         with connection:
-            cursor = connection.execute(statement, (now, scope.store_id))
-            if cursor.rowcount == 0:
-                try:
-                    connection.execute(
-                        "INSERT INTO store_generations "
-                        "(store_id, catalog_generation, index_generation, updated_at) "
-                        "VALUES (?, 0, 0, ?)",
-                        (scope.store_id, now),
-                    )
-                except sqlite3.IntegrityError:
-                    pass  # Another writer created the row; the statement below re-applies.
-                connection.execute(statement, (now, scope.store_id))
+            self._bump_generation_on(connection, scope, statement, now)
         return self.generations(scope)
+
+    def _bump_generation_on(
+        self,
+        connection: sqlite3.Connection,
+        scope: StoreScope,
+        statement: str,
+        now: str,
+    ) -> None:
+        """Bump one counter inside an existing transaction."""
+
+        cursor = connection.execute(statement, (now, scope.store_id))
+        if cursor.rowcount == 0:
+            try:
+                connection.execute(
+                    "INSERT INTO store_generations "
+                    "(store_id, catalog_generation, index_generation, updated_at) "
+                    "VALUES (?, 0, 0, ?)",
+                    (scope.store_id, now),
+                )
+            except sqlite3.IntegrityError:
+                pass  # Another writer created the row; the statement below re-applies.
+            connection.execute(statement, (now, scope.store_id))
+
+    # -- merchant publication ------------------------------------------------
+
+    def publish_item_with_image(
+        self,
+        scope: StoreScope,
+        *,
+        item_id: str,
+        title: str,
+        category: str,
+        price: Decimal | None,
+        price_kind: str,
+        attributes: Mapping[str, Any],
+        provenance: Sequence[EvidenceRef],
+        catalog_version: str,
+        image: ImageAttachment,
+        actor: str,
+    ) -> str:
+        """Publish one item, its image and its event in a single transaction.
+
+        Also bumps the catalog generation exactly once. Raises `DuplicateImageError`
+        when this store already represents the submitted source bytes, so a
+        re-submission never creates a second item or image row.
+        """
+
+        _validate_item(item_id, title, category, price, price_kind, catalog_version, 0)
+        _validate_capture_time(image.capture_time, image.capture_time_source)
+        validate_media_address(image.sha256, image.variant)
+        validate_media_address(image.source_sha256, image.variant)
+        if not image.media_type.startswith("image/"):
+            raise CatalogError("media_type must be an image media type")
+        if image.width <= 0 or image.height <= 0 or image.byte_size <= 0:
+            raise CatalogError("image dimensions and byte size must be positive")
+        if not actor:
+            raise CatalogError("item events require an actor")
+
+        provenance_json = json.dumps(
+            [
+                {
+                    "source_id": ref.source_id,
+                    "source_type": ref.source_type.value,
+                    "observed_at": ref.observed_at.isoformat(),
+                }
+                for ref in provenance
+            ],
+            sort_keys=True,
+        )
+        attributes_json = json.dumps(dict(attributes), sort_keys=True)
+        capture_text = image.capture_time.isoformat() if image.capture_time is not None else None
+        event_id = str(uuid4())
+        now = utc_now()
+        connection = self._database.connection()
+        try:
+            with connection:
+                existing = connection.execute(
+                    "SELECT item_id FROM images WHERE store_id = ? AND source_sha256 = ?",
+                    (scope.store_id, image.source_sha256),
+                ).fetchone()
+                if existing is not None:
+                    raise DuplicateImageError(str(existing["item_id"]))
+                next_order = connection.execute(
+                    "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order "
+                    "FROM items WHERE store_id = ?",
+                    (scope.store_id,),
+                ).fetchone()
+                connection.execute(
+                    "INSERT INTO items ("
+                    "store_id, item_id, title, category, price, price_kind, listing_state, "
+                    "index_state, index_attempts, index_error, sort_order, attributes_json, "
+                    "provenance_json, catalog_version, created_at, updated_at"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?)",
+                    (
+                        scope.store_id,
+                        item_id,
+                        title,
+                        category,
+                        str(price) if price is not None else None,
+                        price_kind,
+                        ListingState.PUBLISHED.value,
+                        IndexState.PENDING.value,
+                        int(next_order["next_order"]),
+                        attributes_json,
+                        provenance_json,
+                        catalog_version,
+                        now,
+                        now,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO images ("
+                    "store_id, image_id, item_id, variant, sha256, source_sha256, media_type, "
+                    "width, height, byte_size, capture_time, capture_time_source, created_at"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        scope.store_id,
+                        str(uuid4()),
+                        item_id,
+                        image.variant,
+                        image.sha256,
+                        image.source_sha256,
+                        image.media_type,
+                        image.width,
+                        image.height,
+                        image.byte_size,
+                        capture_text,
+                        image.capture_time_source.value,
+                        now,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO item_events ("
+                    "store_id, event_id, item_id, event_type, actor, occurred_at, "
+                    "before_json, after_json"
+                    ") VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
+                    (
+                        scope.store_id,
+                        event_id,
+                        item_id,
+                        "published",
+                        actor,
+                        now,
+                        json.dumps(
+                            {
+                                "item_id": item_id,
+                                "listing_state": ListingState.PUBLISHED.value,
+                                "index_state": IndexState.PENDING.value,
+                                "price": str(price) if price is not None else None,
+                                "price_kind": price_kind,
+                                "image_sha256": image.sha256,
+                                "source_sha256": image.source_sha256,
+                                "capture_time": capture_text,
+                                "capture_time_source": image.capture_time_source.value,
+                                "catalog_version": catalog_version,
+                            },
+                            sort_keys=True,
+                        ),
+                    ),
+                )
+                self._bump_generation_on(
+                    connection,
+                    scope,
+                    "UPDATE store_generations "
+                    "SET catalog_generation = catalog_generation + 1, updated_at = ? "
+                    "WHERE store_id = ?",
+                    now,
+                )
+        except DuplicateImageError:
+            raise
+        except sqlite3.IntegrityError as error:
+            raise CatalogConflictError(f"could not publish item {item_id}") from error
+        return event_id
 
     # -- embeddings ----------------------------------------------------------
 

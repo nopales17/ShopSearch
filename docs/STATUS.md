@@ -63,9 +63,23 @@ shell lists the store's items with listing and index state, redirects unauthenti
 requests to sign-in without leaking item data, and a valid merchant session for the
 resolved store classifies that merchant's public storefront traffic as `merchant_self`
 instead of customer traffic.
+S7 adds the merchant photo+price publish path. `/manage/publish` accepts one photo
+(camera capture supported), an optional price, optional title/category and the explicit
+"I just took this photo" attestation behind the S6 session and CSRF boundary. Uploads
+are bounded (12 MiB; JPEG/PNG/WebP only, no HEIC), format is sniffed from decoded bytes
+rather than the filename or declared type, and derivatives reuse the existing
+EXIF-stripping path. One submission writes the item, its image and its item event and
+bumps the catalog generation exactly once in a single transaction, with the
+authenticated merchant id as the event actor, `published` listing state and `pending`
+index state; a failed publication removes the derivative it wrote. Capture time comes
+from EXIF when present, otherwise from the attestation with source
+`merchant_attestation`, otherwise stays unknown. Exact re-submission of source bytes in
+the same store reuses the stored blob and creates nothing new. Indexing stays the
+existing S4 indexer: the item is browsable immediately and becomes visual-text
+searchable after one indexer run, with no further merchant action.
 
 ## Verification
-144 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+166 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -118,6 +132,15 @@ invalid-credential responses, logout revocation, cross-store session rejection w
 same-store acceptance, `merchant_self` storefront classification for a valid session
 only (foreign/revoked/disabled/expired cookies keep the store's default class), and a
 response-body scan proving password hashes and session tokens never appear.
+S7 adds upload validation (empty, non-image, mismatched declared type, unsupported
+format, over-cap bytes, oversized request), Decimal price parsing with blank-as-unknown,
+one-item/one-image/one-event/one-generation publication counts, browsable-before-indexing
+plus visual-search exclusion with truthful coverage and searchability after one indexer
+run, indexer-failure leaving the item published with `index_state=failed` and a recorded
+error, distinguishable EXIF/merchant-attestation/unknown capture provenance, duplicate
+byte reuse without a second image row or mutation, cross-store non-deduplication,
+auth/CSRF failures creating no state, demo stores having no publish form or publish
+path, orphan-blob cleanup on a failed publication, and a structural 375px form check.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -174,6 +197,18 @@ process-local by design for the one-process runtime, there is no account deletio
 roles, self-service signup, or email, and `/manage` is read-only in this slice. Served
 media is a local content-addressed filesystem store; backup, restore and media
 synchronisation are S10.
+Merchant publication is bounded to 12 MiB per photo and to JPEG/PNG/WebP, so HEIC
+photos from some phones are rejected until ADR-0004 is amended; the request cap is that
+byte cap plus multipart framing. Publishing is limited to live stores: the demo store
+keeps its mandatory CC0/not-for-sale wording and exposes no publish form, so merchant
+merchandise is never mixed into the illustrative demo. Duplicate detection is a
+store-scoped `images.source_sha256` check inside the publication transaction; two
+simultaneous identical uploads could still create two items because S7 deliberately did
+not add a unique constraint to S3's schema. Publishing bumps the S4 catalog generation
+(which invalidates the storefront snapshot and vector cache) and leaves the
+represented-catalog version string unchanged, because search telemetry and the demo
+import bind to that version. No merchant-labor measurement was recorded for S7, so
+PRODUCT.md is unchanged.
 Funnel reporting covers recorded local demo and store traffic only; public-telemetry
 retention, access and notice decisions remain unresolved.
 
@@ -203,16 +238,19 @@ truthful coverage counts and disclosure, and the bounded-retry indexer with its 
 S5 is implemented: store-scoped, validated telemetry on the platform substrate with
 per-store reporting and explicit traffic classes. S6 is implemented: founder-provisioned
 merchant accounts, store-scoped sessions, CSRF-protected sign-in/out, the read-only
-management shell and merchant-self traffic classification. S7-S10 are not implemented
-yet.
+management shell and merchant-self traffic classification. S7 is implemented:
+authenticated photo+price publication with bounded upload validation, capture
+provenance, duplicate-byte reuse and the existing indexer as the only indexing step.
+S8-S10 are not implemented yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S7 in `docs/SLICES.md`: mobile publish (photo plus price) behind the authenticated
-merchant shell. Execute only S7; its acceptance criteria and non-goals are in the slice
-register, and the escalation rules in AGENTS apply. Do not pull later slices forward.
+S8 in `docs/SLICES.md`: amend, hide, mark sold and relist, with an item event and a
+catalog-generation bump for every mutation. Execute only S8; its acceptance criteria and
+non-goals are in the slice register, and the escalation rules in AGENTS apply. Do not
+pull later slices forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

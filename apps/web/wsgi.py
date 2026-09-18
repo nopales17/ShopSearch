@@ -20,11 +20,14 @@ from typing import Any, Iterable, Mapping
 
 import waitress
 from flask import Flask, Response, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
-from apps.web.manage import MerchantShell, ShellResponse
+from apps.web.manage import MerchantShell, ShellResponse, UploadedPhoto
 from apps.web.pitch_server import PitchApplication, build_pitch_application, open_demo_stack
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION
 from backend.auth.service import MERCHANT_COOKIE
+from backend.catalog.publish import MerchantPublisher
+from backend.media.uploads import MAX_UPLOAD_BYTES
 from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
 from backend.search.multimodal import TextEncoder
 from backend.search.vector_source import VectorCache
@@ -138,6 +141,27 @@ def _dispatch(
     )
 
 
+def _uploaded_photos() -> dict[str, UploadedPhoto]:
+    """Read bounded upload parts; the request cap already bounds the body."""
+
+    photos: dict[str, UploadedPhoto] = {}
+    for field in ("photo",):
+        storage = request.files.get(field)
+        if storage is None:
+            continue
+        try:
+            data = storage.stream.read(MAX_UPLOAD_BYTES + 1)
+        finally:
+            # Release the parser's spooled temporary file as soon as it is read.
+            storage.close()
+        photos[field] = UploadedPhoto(
+            filename=storage.filename or "",
+            content_type=storage.content_type or "",
+            data=data,
+        )
+    return photos
+
+
 def _plain(status: HTTPStatus, body: str) -> Response:
     """A response for an unresolved host, carrying no store data and no cookie."""
 
@@ -191,7 +215,7 @@ def create_pitch_app(
     vector_cache = VectorCache(
         stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
     )
-    applications: dict[str, PitchApplication] = {}
+    applications: dict[str, tuple[int, PitchApplication]] = {}
     shells: dict[str, MerchantShell] = {}
     application_lock = threading.Lock()
 
@@ -200,10 +224,12 @@ def create_pitch_app(
             existing = shells.get(store.store_id)
             if existing is not None:
                 return existing
+            publisher = MerchantPublisher(store, stack.catalog_repository, stack.image_store)
             shell = MerchantShell(
                 store,
                 stack.auth_stores.for_store(store),
                 stack.catalog_repository,
+                publisher,
                 model_id=MODEL_ID,
                 model_revision=MODEL_REVISION,
             )
@@ -213,10 +239,11 @@ def create_pitch_app(
     def application_for(scope: StoreScope) -> PitchApplication | None:
         if scope.store_id not in provisioned:
             return None
+        generation = stack.catalog_repository.generations(scope).catalog
         with application_lock:
             existing = applications.get(scope.store_id)
-            if existing is not None:
-                return existing
+            if existing is not None and existing[0] == generation:
+                return existing[1]
             store = stack.store_repository.find_store(scope)
             if store is None or not stack.catalog_repository.has_items(scope):
                 return None
@@ -230,13 +257,19 @@ def create_pitch_app(
                 stack.telemetry_stores.for_store(store),
                 encoder,
             )
-            applications[scope.store_id] = application
+            applications[scope.store_id] = (generation, application)
             return application
 
     app = Flask(__name__, static_folder=None)
     app.url_map.merge_slashes = False
 
-    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+    # S7 replaces the S6 16 KB form cap with a bounded image upload: a 12 MiB image
+    # plus multipart framing. Larger bodies are rejected before parsing.
+    app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES + 64 * 1024
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def upload_too_large(error: RequestEntityTooLarge) -> Response:
+        return _plain(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "That upload is too large.")
 
     @app.route("/", defaults={"path": ""}, methods=["GET", "POST"])
     @app.route("/<path:path>", methods=["GET", "POST"])
@@ -259,6 +292,8 @@ def create_pitch_app(
                     path=request.path,
                     cookies=request.cookies,
                     form=request.form,
+                    query=request.args,
+                    files=_uploaded_photos(),
                 )
             )
         application = application_for(scope)
