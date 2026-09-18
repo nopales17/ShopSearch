@@ -146,7 +146,8 @@ item detail were manually checked. The documented `make serve` target was smoke-
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
 runs the same checks on Python 3.11/3.12; the S4 commit c37985f passed both the 3.11
 and 3.12 jobs, the S5 commit 30e0cb6 passed both as well, and the S6 commit 2f70437
-passed both (earlier results are in the GitHub Actions history).
+passed both. The S7 commit 2dc6db0 also passed both jobs (earlier results are in the
+GitHub Actions history).
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
