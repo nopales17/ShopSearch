@@ -248,7 +248,14 @@ class HostResolverTest(unittest.TestCase):
 
 
 class PersistenceImportBoundaryTest(unittest.TestCase):
-    """Only the persistence layer may import sqlite3 or the connection factory."""
+    """Only the persistence layer may import sqlite3 or the connection factory.
+
+    ADR-0005 §2 rejects a static "every SQL statement mentions store_id" grep as
+    brittle. This test asserts the boundary instead: `sqlite3` and the raw connection
+    factory stay inside the repository layer, and no web, view, search, tool or
+    experiment module reaches for a connection of its own. Tests may open raw
+    connections for schema-level adversarial proof; application code may not.
+    """
 
     ALLOWED = {
         "backend/platform/db.py",
@@ -257,22 +264,70 @@ class PersistenceImportBoundaryTest(unittest.TestCase):
         "backend/telemetry/sqlite_store.py",
         "backend/auth/repository.py",
     }
+    # `backend/auth/service.py` builds each store's `MerchantRepository` around a
+    # `Database` handle but executes no SQL itself; the test below pins that fact.
+    RAW_FACTORY_ALLOWED = ALLOWED | {"backend/auth/service.py"}
 
-    def test_sqlite3_and_connection_factory_stay_in_the_persistence_layer(self) -> None:
-        offenders: list[str] = []
-        for package in ["apps", "backend", "contracts", "tools", "experiments"]:
-            for path in sorted((ROOT / package).rglob("*.py")):
-                relative = path.relative_to(ROOT).as_posix()
-                if relative in self.ALLOWED:
-                    continue
-                tree = ast.parse(path.read_text(encoding="utf-8"))
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.Import):
-                        if any(alias.name.split(".")[0] == "sqlite3" for alias in node.names):
-                            offenders.append(relative)
-                    if isinstance(node, ast.ImportFrom):
-                        module = (node.module or "").split(".")[0]
-                        if module == "sqlite3" or node.module == "backend.platform.db":
-                            offenders.append(relative)
-        self.assertEqual(sorted(set(offenders)), [])
+    # Attributes that hand out a connection or the connection factory itself.
+    RAW_FACTORY_ATTRIBUTES = frozenset({"Database", "connect", "apply_migrations", "connect"})
+    SCANNED_PACKAGES = ("apps", "backend", "contracts", "tools", "experiments")
+
+    def scanned_modules(self) -> list[tuple[str, Path]]:
+        return [
+            (path.relative_to(ROOT).as_posix(), path)
+            for package in self.SCANNED_PACKAGES
+            for path in sorted((ROOT / package).rglob("*.py"))
+        ]
+
+    def test_sqlite3_and_the_raw_connection_factory_stay_in_the_persistence_layer(self) -> None:
+        sqlite_offenders: list[str] = []
+        factory_offenders: list[str] = []
+        for relative, path in self.scanned_modules():
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            aliases = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split(".")[0] == "sqlite3" and relative not in self.ALLOWED:
+                            sqlite_offenders.append(f"{relative}: imports sqlite3")
+                        if alias.name == "backend.platform.db":
+                            aliases.add(alias.asname or "db")
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if relative not in self.ALLOWED and module.split(".")[0] == "sqlite3":
+                        sqlite_offenders.append(f"{relative}: imports {module}")
+                    if relative not in self.RAW_FACTORY_ALLOWED and module == "backend.platform.db":
+                        factory_offenders.append(f"{relative}: imports {module}")
+                    elif module == "backend.platform":
+                        for alias in node.names:
+                            if alias.name == "db":
+                                aliases.add(alias.asname or "db")
+            for node in ast.walk(tree):
+                if (
+                    relative not in self.RAW_FACTORY_ALLOWED
+                    and isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in aliases
+                    and node.attr in self.RAW_FACTORY_ATTRIBUTES
+                ):
+                    factory_offenders.append(f"{relative}: {node.value.id}.{node.attr}")
+        self.assertEqual(sorted(set(sqlite_offenders)), [], "sqlite3 escaped the repository layer")
+        self.assertEqual(
+            sorted(set(factory_offenders)), [], "the connection factory escaped its layer"
+        )
         self.assertIn("import sqlite3", (ROOT / "backend/platform/db.py").read_text())
+
+    def test_the_one_connection_factory_exception_executes_no_sql(self) -> None:
+        module = (ROOT / "backend/auth/service.py").read_text(encoding="utf-8")
+        self.assertIn("platform_db.Database", module)
+        for keyword in ("SELECT ", "INSERT ", "UPDATE ", "DELETE "):
+            with self.subTest(keyword=keyword):
+                self.assertNotIn(keyword, module)
+
+    def test_the_boundary_scans_application_code_only(self) -> None:
+        scanned = {relative for relative, _ in self.scanned_modules()}
+        self.assertTrue(any(relative.startswith("apps/") for relative in scanned))
+        self.assertTrue(any(relative.startswith("backend/search/") for relative in scanned))
+        self.assertFalse(any(relative.startswith("tests/") for relative in scanned))
+        for relative in self.ALLOWED:
+            self.assertIn(relative, scanned)

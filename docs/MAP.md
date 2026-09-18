@@ -136,8 +136,10 @@ sign-in/out and the management shell. S7 is implemented: authenticated photo+pri
 publication into a live store, with bounded upload validation, capture provenance,
 duplicate-byte reuse and indexing handed to the existing indexer. S8 is implemented:
 authenticated amend, hide/unhide, sold/relist and photo replacement, one atomic catalog
-mutation per action with an item event and a catalog-generation bump. S9-S10 are not
-implemented.
+mutation per action with an item event and a catalog-generation bump. S9 is implemented:
+a synthetic two-store isolation fixture and its adversarial suite prove that catalog,
+media, search, embeddings, telemetry and merchant authority fail closed across two
+simultaneously provisioned stores. S10 is not implemented.
 
 S5 moves platform telemetry to the store-scoped `telemetry_events` table (indexed on
 `(store_id, search_id)` and `(store_id, occurred_at)`). `backend/telemetry/validation.py`
@@ -189,6 +191,22 @@ edit, listing and photo-replacement forms (all CSRF-protected and usable at 375 
 `apps/web/manage.py` maps only the four named listing actions, records the authenticated
 merchant as actor, and returns one non-disclosing response for an unknown item and for
 another store's item ID.
+
+S9 adds isolation proof rather than capability. `data/stores/isolation-fixture.json` is a
+committed synthetic store document (no demo or prospective Customer Zero content), and
+`tests/support/isolation_fixture.py` provisions it twice as `isolation-alpha` and
+`isolation-beta` with distinct hostnames, branding, catalogs, media, embeddings,
+merchants and telemetry, plus a registered-but-unprovisioned host. The fixture
+deliberately reuses item IDs, source image bytes and the merchant username across the two
+stores, so isolation has to come from `StoreScope`. `tests/acceptance/test_store_isolation.py`
+is the concentrated adversarial HTTP suite (catalog, detail, media, the frozen query set,
+generation/vector-cache independence, sessions and CSRF, telemetry, mutations,
+unknown/unprovisioned hosts, one loopback process serving both hostnames), and
+`tests/unit/test_schema_isolation.py` audits every store-scoped table and proves SQLite
+rejects cross-store child rows. The persistence import boundary in
+`tests/unit/test_store_registry.py` keeps `sqlite3` and the raw connection factory inside
+the repository layer. Nothing here is provisioned by the production composition: the two
+fixture stores and the unprovisioned host exist only in tests.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

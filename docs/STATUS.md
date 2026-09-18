@@ -92,9 +92,28 @@ browsable and is excluded from visual-text ranking until the existing S4 indexer
 once. The internal catalog lookup that mutation and duplicate-cleanup paths use works
 for every listing state, so duplicate source bytes belonging to a hidden or sold item
 can no longer delete that item's referenced blob.
+S9 adds adversarial isolation proof with a second seeded store rather than new
+capability. `data/stores/isolation-fixture.json` is a committed synthetic store document
+(no demo or prospective Customer Zero content), provisioned twice in tests as
+`isolation-alpha` and `isolation-beta` with distinct hostnames, branding, catalogs,
+media, embeddings, merchants and telemetry, plus a registered-but-unprovisioned
+hostname. The fixture deliberately reuses identifiers across stores — the same item IDs,
+the same source image bytes and the same merchant username with different credentials —
+so isolation cannot come from accidentally unique fixture values. One application process
+serves both hostnames concurrently (`storefronts={alpha, beta}`) with no default,
+wildcard or first-match fallback: an unknown hostname, an unprovisioned registered
+hostname and the registered demo hostname all return the same store-free 404. The
+concentrated suite crosses every boundary on purpose: item and detail requests, media
+URLs (including an identical content address that each store owns independently), the
+frozen query set over both full seeded catalogs, per-store catalog/index generations and
+vector caches, merchant cookies and CSRF tokens, telemetry writes and attribution,
+reports, and every S7/S8 mutation. A schema audit covers all nine store-scoped tables and
+proves with direct inserts that SQLite rejects cross-store child rows, unknown-store rows
+and a hostname claimed by two stores. No isolation defect was found, so no migration was
+added.
 
 ## Verification
-206 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+231 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -169,6 +188,30 @@ item not deleting that item's blob, a simultaneous identical replacement resolve
 the migration-0006 unique index with one caller receiving the duplicate outcome, and
 cross-store item ids returning the same non-disclosing response as an unknown item for
 reads and every mutation while changing no item, image, event, generation or blob.
+S9 adds the adversarial two-store suite: both hostnames served concurrently from one
+application (WSGI client and a real loopback Waitress process with two Host headers),
+store-A-only and store-B-only item IDs 404ing on the other hostname while deliberately
+shared item IDs resolve to each store's own title, price, image and claim; media
+addresses resolving only for the store that owns them, with the identical shared address
+served independently by both and a hidden/sold item's bytes still invisible on its own
+hostname; the frozen query set (evaluation queries plus controls, 15 in total) over both
+full seeded catalogs, where every returned item belongs to the resolved store and each
+returned record is verified through that store's detail page; per-store catalog and index
+generations and vector-cache snapshots, where a store-A publish, edit, hide/unhide,
+relist or embedding write leaves store-B's snapshot object, generation pair and effective
+search payload unchanged; a store-A merchant cookie and CSRF token conferring no
+authority on store B for reads or for publish/edit/listing/replace, with the shared
+username resolving to different merchant identities and credentials; telemetry rows,
+search attribution and `summarize_store` reports staying disjoint, with cross-store sink
+writes and cross-store search/catalog attribution rejected and merchant-self traffic in
+one store never entering the other store's customer denominators; and identical source
+bytes in two stores remaining independent addresses where a failed or duplicate store-A
+operation deletes nothing store B references. The schema audit enumerates every table and
+proves cross-store `images`, `item_events`, `embeddings` and `merchant_sessions` rows,
+unknown-store rows and a hostname claimed by two stores are rejected at the schema level.
+The persistence import boundary now also fails if the raw connection factory escapes the
+repository layer, with the one repository-composition exception
+(`backend/auth/service.py`, which executes no SQL) pinned by test.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -213,7 +256,12 @@ the same SQLite file as the registry, with store-scoped keys. The committed CLIP
 file is an import/parity source only, so after an image change the old vector stays
 `stale` (never ranked) until the indexer runs. Only the demo store is provisioned with a
 catalog in the composition, and a resolved store without one gets 404 rather than another
-store's catalog (S9 hardens this with a second real store). The indexer is a component
+store's catalog. S9 proves that with two simultaneously provisioned stores, but both are
+synthetic test fixtures: the committed `isolation-fixture` document and the
+`isolation-alpha`/`isolation-beta` provisionings exist only inside tests, are never served
+by the production composition, and assert no merchant, customer or availability fact.
+Their telemetry is generated test traffic, not customer evidence, and S9 adds no
+cross-store search, analytics or shared merchant identity. The indexer is a component
 plus a CLI, not a daemon thread: the only runtime producers of `pending` items are the
 S7 publish and S8 replacement operations, and no generic job framework is introduced. Coverage
 counts and disclosure wording come from the store record, but the notice itself renders
@@ -281,19 +329,23 @@ authenticated photo+price publication with bounded upload validation, capture
 provenance, duplicate-byte reuse and the existing indexer as the only indexing step.
 S8 is implemented: authenticated amend, hide/unhide, sold/relist and photo replacement,
 each one atomic catalog mutation with one item event and one catalog-generation bump,
-with hidden and sold items keeping their media and history. S9-S10 are not implemented
-yet.
+with hidden and sold items keeping their media and history. S9 is implemented: a
+synthetic two-store isolation fixture and its adversarial suite prove that catalog, media,
+search, embeddings, telemetry and merchant authority fail closed across two
+simultaneously provisioned stores. S10 is not implemented yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S9 in `docs/SLICES.md`: prove isolation adversarially with a second real store — its own
-hostname, branding, catalog, merchant accounts and telemetry, plus the adversarial test
-suite, the import-boundary test and a review that every store-scoped table carries
-composite store-scoped keys. Execute only S9; its acceptance criteria and non-goals are
-in the slice register, and the escalation rules in AGENTS apply. Do not pull later
-slices forward.
+S10 in `docs/SLICES.md`: make the platform hostable and recoverable and retire the
+superseded fixture slice — environment-based configuration and secrets, reverse-proxy and
+service configuration, nightly backup and media synchronisation with a restore drill,
+structured operational logging distinct from telemetry, a health endpoint covering
+database and media, and removal of the legacy fixture slice only after the platform
+storefront passes equivalent journeys. Execute only S10; its acceptance criteria and
+non-goals are in the slice register, and the escalation rules in AGENTS apply. Do not pull
+later work forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission
