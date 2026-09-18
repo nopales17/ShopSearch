@@ -98,6 +98,18 @@ class IndexSummary:
         return self.published - self.ready
 
 
+@dataclass(frozen=True)
+class ManagedItem:
+    """One item as a merchant sees it: listing state plus effective index state."""
+
+    item_id: str
+    title: str
+    category: str
+    price: Decimal | None
+    listing_state: ListingState
+    index_state: IndexState
+
+
 class CatalogRepository:
     """Typed, store-scoped access to `items`, `images` and `item_events`."""
 
@@ -478,6 +490,35 @@ class CatalogRepository:
             store.configuration(), version, tuple(items), tuple(observations), "store_catalog"
         )
 
+    def managed_items(
+        self,
+        scope: StoreScope,
+        *,
+        model_id: str,
+        model_revision: str,
+        dimensions: int,
+    ) -> tuple[ManagedItem, ...]:
+        """Every item in the store with its listing state and effective index state."""
+
+        managed = []
+        for row in self._index_rows(scope, None):
+            managed.append(
+                ManagedItem(
+                    item_id=str(row["item_id"]),
+                    title=str(row["title"]),
+                    category=str(row["category"]),
+                    price=_decimal_or_error(row["price"]),
+                    listing_state=ListingState(row["listing_state"]),
+                    index_state=_effective_index_state(
+                        row,
+                        model_id=model_id,
+                        model_revision=model_revision,
+                        dimensions=dimensions,
+                    ),
+                )
+            )
+        return tuple(managed)
+
     # -- internals ----------------------------------------------------------
 
     def _items(self, scope: StoreScope, states: Sequence[ListingState]) -> tuple[CatalogItem, ...]:
@@ -765,11 +806,26 @@ class CatalogRepository:
         return tuple(candidates)
 
     def _published_index_rows(self, scope: StoreScope) -> list[sqlite3.Row]:
+        return self._index_rows(scope, (ListingState.PUBLISHED,))
+
+    def _index_rows(
+        self, scope: StoreScope, states: Sequence[ListingState] | None
+    ) -> list[sqlite3.Row]:
+        listing_filter = ""
+        parameters: tuple[Any, ...] = (DISPLAY_VARIANT, scope.store_id)
+        if states is not None:
+            placeholders = ", ".join("?" for _ in states)
+            listing_filter = f" AND items.listing_state IN ({placeholders})"
+            parameters = (*parameters, *(state.value for state in states))
         return (
             self._database.connection()
             .execute(
-                """
+                f"""
                 SELECT items.item_id AS item_id,
+                       items.title AS title,
+                       items.category AS category,
+                       items.price AS price,
+                       items.listing_state AS listing_state,
                        items.index_state AS index_state,
                        items.index_attempts AS index_attempts,
                        images.sha256 AS image_sha256,
@@ -786,10 +842,10 @@ class CatalogRepository:
                 LEFT JOIN embeddings
                   ON embeddings.store_id = items.store_id
                  AND embeddings.item_id = items.item_id
-                WHERE items.store_id = ? AND items.listing_state = ?
+                WHERE items.store_id = ?{listing_filter}
                 ORDER BY items.sort_order, items.item_id
                 """,
-                (DISPLAY_VARIANT, scope.store_id, ListingState.PUBLISHED.value),
+                parameters,
             )
             .fetchall()
         )

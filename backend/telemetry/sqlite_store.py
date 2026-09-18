@@ -21,7 +21,7 @@ from backend.telemetry.validation import (
     validate_event,
 )
 from contracts.store import Store
-from contracts.telemetry import TelemetryEvent
+from contracts.telemetry import TelemetryEvent, TrafficClass
 
 _COLUMNS = "store_id, event_id, event_type, occurred_at, session_id, search_id, payload_json"
 
@@ -45,7 +45,9 @@ class SqliteTelemetryStore:
         traffic = validate_event(snapshot)
         if snapshot["store_id"] != self._store.store_id:
             raise ValueError("telemetry store scope mismatch")
-        if traffic.is_demo != self._store.is_demo:
+        # Merchant-self traffic is never customer traffic, so it is valid for any
+        # store kind; demo/fixture classes stay demo-only and customer stays live-only.
+        if traffic is not TrafficClass.MERCHANT_SELF and traffic.is_demo != self._store.is_demo:
             raise ValueError("telemetry traffic class does not match the store")
         connection = self._database.connection()
         existing = self._event_row(connection, str(snapshot["event_id"]))

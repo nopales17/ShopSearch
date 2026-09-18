@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 from apps.web import pitch_views as views
 from apps.web.server import STATIC_ROOT, WebApplication
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION, ClipEncoder
+from backend.auth.service import AuthStores
 from backend.catalog.pitch_import import import_pitch_dataset
 from backend.catalog.read_model import LoadedCatalog
 from backend.catalog.store_repository import CatalogRepository
@@ -41,12 +42,10 @@ from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
 from backend.telemetry.jsonl_store import new_event
 from backend.telemetry.sqlite_store import TelemetryStores
+from contracts.auth import MerchantIdentity
 from contracts.search import SearchQuery, SearchService
 from contracts.store import Store, StoreScope
-from contracts.telemetry import EventType, TelemetrySink
-
-# The demo store keeps its P1 telemetry classification (ADR-0005 §8).
-DEMO_TRAFFIC = "pitch_demo"
+from contracts.telemetry import EventType, TelemetrySink, TrafficClass
 
 
 @dataclass(frozen=True)
@@ -59,6 +58,7 @@ class StorefrontStack:
     store: Store
     index_path: Path
     telemetry_stores: TelemetryStores
+    auth_stores: AuthStores
 
     def close(self) -> None:
         """Release backend connections; safe to call more than once."""
@@ -66,6 +66,7 @@ class StorefrontStack:
         self.catalog_repository.close()
         self.store_repository.close()
         self.telemetry_stores.close()
+        self.auth_stores.close()
 
 
 def open_demo_stack(
@@ -76,6 +77,7 @@ def open_demo_stack(
     store_repository = StoreRepository.open(database_path or DEFAULT_DATABASE_PATH)
     catalog_repository = CatalogRepository.open(database_path or DEFAULT_DATABASE_PATH)
     telemetry_stores = TelemetryStores.open(database_path or DEFAULT_DATABASE_PATH)
+    auth_stores = AuthStores.open(database_path or DEFAULT_DATABASE_PATH)
     image_store = LocalImageStore(media_root or DEFAULT_MEDIA_ROOT)
     store = seed_store(store_repository, DEFAULT_DEMO_STORE_PATH)
     import_pitch_dataset(catalog_repository, image_store, DEFAULT_DEMO_DATASET_PATH, store)
@@ -93,6 +95,7 @@ def open_demo_stack(
         store,
         DEFAULT_DEMO_INDEX_PATH,
         telemetry_stores,
+        auth_stores,
     )
 
 
@@ -107,6 +110,7 @@ class PitchApplication(WebApplication):
         catalog_repository: CatalogRepository,
         image_store: ImageStore,
         index_path: Path,
+        default_traffic: TrafficClass,
     ) -> None:
         super().__init__(catalog, telemetry)
         self.search = search
@@ -114,10 +118,17 @@ class PitchApplication(WebApplication):
         self.scope = scope
         self.catalog_repository = catalog_repository
         self.image_store = image_store
+        self.default_traffic = default_traffic
         self.index_sha256 = hashlib.sha256(index_path.read_bytes()).hexdigest()
 
     def event(
-        self, kind: EventType, session: str, payload: dict[str, Any], search_id: str | None = None
+        self,
+        kind: EventType,
+        session: str,
+        payload: dict[str, Any],
+        search_id: str | None = None,
+        *,
+        traffic: TrafficClass,
     ) -> None:
         self.telemetry.append(
             new_event(
@@ -125,7 +136,7 @@ class PitchApplication(WebApplication):
                 session,
                 self.scope.store_id,
                 {
-                    "traffic": DEMO_TRAFFIC,
+                    "traffic": traffic.value,
                     "catalog_version": self.catalog.version,
                     "retrieval_index_sha256": self.index_sha256,
                     **payload,
@@ -134,7 +145,12 @@ class PitchApplication(WebApplication):
             )
         )
 
-    def _handle(self, request: BaseHTTPRequestHandler) -> None:
+    def _handle(
+        self, request: BaseHTTPRequestHandler, merchant: MerchantIdentity | None = None
+    ) -> None:
+        # A merchant browsing this store's own storefront is classified separately from
+        # customer traffic; anything else keeps the store's default public class.
+        traffic = TrafficClass.MERCHANT_SELF if merchant is not None else self.default_traffic
         parsed = urlparse(request.path)
         if parsed.path == "/health":
             self._respond(request, HTTPStatus.OK, "text/plain", "ok")
@@ -158,16 +174,16 @@ class PitchApplication(WebApplication):
             raise ValueError("query too long")
         session, fresh = self._session(request)
         if fresh:
-            self.event(EventType.SESSION_STARTED, session, {})
+            self.event(EventType.SESSION_STARTED, session, {}, traffic=traffic)
         status = HTTPStatus.OK
         content_type = "text/html; charset=utf-8"
         if parsed.path == "/":
-            self.event(EventType.HOMEPAGE_VIEWED, session, {})
+            self.event(EventType.HOMEPAGE_VIEWED, session, {}, traffic=traffic)
             body = views.home(self.catalog, self.store)
         elif parsed.path == "/credits":
             body = views.credits(self.catalog, self.store)
         elif parsed.path == "/catalog":
-            self.event(EventType.CATALOG_OPENED, session, {})
+            self.event(EventType.CATALOG_OPENED, session, {}, traffic=traffic)
             body = views.catalog_page(self.catalog, self.store, query)
         elif parsed.path == "/api/search":
             category = parameters.get("category", [""])[0]
@@ -192,6 +208,7 @@ class PitchApplication(WebApplication):
                     session,
                     {"query": query, "filters": filters},
                     search_id,
+                    traffic=traffic,
                 )
                 items = tuple(self.catalog.items_by_result(r.item_id) for r in response.results)
                 self.event(
@@ -211,6 +228,7 @@ class PitchApplication(WebApplication):
                         ],
                     },
                     search_id,
+                    traffic=traffic,
                 )
                 if not items:
                     self.event(
@@ -218,6 +236,7 @@ class PitchApplication(WebApplication):
                         session,
                         {"query": query, "filters": filters},
                         search_id,
+                        traffic=traffic,
                     )
             else:
                 items = tuple(
@@ -244,7 +263,11 @@ class PitchApplication(WebApplication):
             else:
                 search_id = parameters.get("search_id", [None])[0]
                 self.event(
-                    EventType.ITEM_OPENED, session, self.catalog.public_snapshot(item), search_id
+                    EventType.ITEM_OPENED,
+                    session,
+                    self.catalog.public_snapshot(item),
+                    search_id,
+                    traffic=traffic,
                 )
                 body = views.item_page(item, self.store, query, search_id)
         elif parsed.path == "/api/demo-action":
@@ -259,6 +282,7 @@ class PitchApplication(WebApplication):
                 session,
                 {**self.catalog.public_snapshot(item), "simulated": True},
                 search_id,
+                traffic=traffic,
             )
             content_type, body = "application/json", '{"simulated":true,"contacted_business":false}'
         else:
@@ -306,8 +330,17 @@ def build_pitch_application(
     encoder = encoder or ClipEncoder()
     service = MultimodalSearchService(catalog, vector_source, encoder)
     encoder.text("glass")  # Warm inference at startup, not from the fixed query list.
+    default_traffic = TrafficClass.PITCH_DEMO if store.is_demo else TrafficClass.CUSTOMER
     return PitchApplication(
-        catalog, telemetry, service, store, scope, catalog_repository, image_store, index_path
+        catalog,
+        telemetry,
+        service,
+        store,
+        scope,
+        catalog_repository,
+        image_store,
+        index_path,
+        default_traffic,
     )
 
 

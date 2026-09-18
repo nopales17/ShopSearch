@@ -19,11 +19,13 @@ shopsearch/
 │   ├── SLICES.md             platform transition slices + acceptance criteria
 │   ├── ROADMAP.md            staged future work + falsification gates
 │   ├── ARCHITECTURE.md       module boundaries + invariants
+│   ├── CREDENTIALS.md        operator notes for merchant credential handling
 │   ├── MAP.md                this file
 │   ├── EVIDENCE.md           append-only experimental findings
 │   ├── GITHUB_ISSUES.md      historical bootstrap definitions; future remote issue mapping
 │   └── adr/                  architecture decision records
 ├── contracts/
+│   ├── auth.py               merchant identity/session contracts
 │   ├── catalog.py            item/observation/availability + listing/index/capture states
 │   ├── store.py              StoreScope + store record/presentation contracts
 │   ├── search.py             query/result contracts
@@ -32,6 +34,7 @@ shopsearch/
 ├── backend/
 │   ├── platform/             persistence layer: connection factory, migrations, paths
 │   ├── domain/               pure domain logic
+│   ├── auth/                 merchant credentials, store-scoped sessions, founder CLI
 │   ├── catalog/              catalog validation/read model, store-scoped repository, demo import
 │   ├── media/                ImageStore + content-addressed local store + EXIF-free derivatives
 │   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
@@ -41,7 +44,7 @@ shopsearch/
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             local pinned CLIP encoder/model download
 ├── apps/
-│   └── web/                  Flask/Waitress + legacy stdlib HTTP; fixture + pitch UI
+│   └── web/                  Flask/Waitress + legacy stdlib HTTP; storefront + merchant shell
 ├── data/
 │   ├── demo/                 explicitly non-production fixture catalog + store config
 │   ├── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
@@ -127,8 +130,9 @@ media layer. S4 is implemented: per-item embeddings live in the store-scoped cat
 runtime retrieval reads them through a generation-keyed per-store cache, publication
 stays independent of index state, and coverage is disclosed and recorded. S5 is
 implemented: platform telemetry is store-scoped and validated, with per-store reporting
-that keeps demo/fixture and merchant-self traffic out of customer denominators. S6-S10
-are not implemented.
+that keeps demo/fixture and merchant-self traffic out of customer denominators. S6 is
+implemented: founder-provisioned merchants, store-scoped sessions, CSRF-protected
+sign-in/out and the read-only management shell. S7-S10 are not implemented.
 
 S5 moves platform telemetry to the store-scoped `telemetry_events` table (indexed on
 `(store_id, search_id)` and `(store_id, occurred_at)`). `backend/telemetry/validation.py`
@@ -141,6 +145,17 @@ with identical event IDs, so `report.summarize()` reproduces earlier counts.
 a per-store report whose customer denominators exclude demo/fixture and merchant-self
 traffic. Reports remain descriptive: it does not infer availability, demand, customers
 or purchase outcomes, and it does not write telemetry.
+
+S6 adds founder-provisioned merchant authentication. `backend/auth/` owns passwords
+(PBKDF2-HMAC-SHA256, random salt, 600,000 iterations), the store-scoped
+`merchants`/`merchant_sessions` SQL (`repository.py`), the per-store `MerchantAuth`
+service, the process-local failed-login limiter and the cookie/CSRF helpers
+(`service.py`), and the provisioning CLI (`cli.py`: interactive prompts, never
+password arguments). `contracts/auth.py` carries `MerchantIdentity`/`MerchantSession`.
+`apps/web/manage.py` and `manage_views.py` render the read-only `/manage`,
+`/manage/login` and `/manage/logout` shell; `apps/web/wsgi.py` resolves the store and
+then that store's merchant session, and classifies public storefront traffic from a
+valid session as `merchant_self`. `docs/CREDENTIALS.md` records operator notes.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

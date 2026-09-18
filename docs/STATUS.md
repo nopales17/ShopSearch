@@ -51,9 +51,21 @@ cross its scope. `summarize()` keeps its demo semantics and a new per-store repo
 excludes demo/fixture and merchant-self traffic from customer denominators. A JSONL
 import path replays a legacy demo log with identical event IDs, and the storefront now
 writes through the sink instead of the local JSONL log.
+S6 adds founder-provisioned merchant authentication: store-scoped `merchants` and
+`merchant_sessions` tables (usernames unique per store and reusable across stores),
+PBKDF2-HMAC-SHA256 credentials with a random salt and 600,000 iterations, opaque 32-byte
+session tokens stored only as SHA-256 digests, 12-hour sessions, a
+`Secure`/`HttpOnly`/`SameSite=Lax` `Path=/` cookie, CSRF-protected sign-in and sign-out,
+a process-local 5-failures/15-minute throttle keyed by store and normalized username
+with generic invalid-credential responses, and a founder CLI (create/list/disable/reset
+with interactive password prompts; reset revokes sessions). The read-only `/manage`
+shell lists the store's items with listing and index state, redirects unauthenticated
+requests to sign-in without leaking item data, and a valid merchant session for the
+resolved store classifies that merchant's public storefront traffic as `merchant_self`
+instead of customer traffic.
 
 ## Verification
-117 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+144 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -95,6 +107,17 @@ and the required telemetry indexes; isolation tests proving demo and live stores
 share a report and that merchant-self traffic is excluded from customer denominators;
 and an import test proving `summarize()` over imported demo events is identical to
 `summarize()` over the source events, including the committed expected counts.
+S6 adds password-hashing defaults and random-salt checks, multiple accounts per store
+with cross-store username reuse and duplicate rejection, wrong-password/disabled
+rejection, session store-scoping with only hashed tokens persisted, 12-hour expiry,
+revocation and reset-driven revocation, failed-login throttling with window expiry and
+success clearing the counter, CLI create/list/disable/reset (including the guarantee
+that no password argument is accepted), shell tests for the unauthenticated `/manage`
+redirect without item data, CSRF rejection on login and logout, byte-identical generic
+invalid-credential responses, logout revocation, cross-store session rejection with
+same-store acceptance, `merchant_self` storefront classification for a valid session
+only (foreign/revoked/disabled/expired cookies keep the store's default class), and a
+response-body scan proving password hashes and session tokens never appear.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
@@ -137,15 +160,19 @@ plus a CLI, not a daemon thread: S4 has no runtime producer of pending items bec
 merchant uploads arrive in S7, and no generic job framework is introduced. Coverage
 counts and disclosure wording come from the store record, but the notice itself renders
 client-side from the search response so the server-rendered page bytes stay unchanged.
-JSONL telemetry remains only for the retired Issue #1 fixture slice and for reading
-historical local logs; the platform storefront writes to the database. A pre-S4 JSONL
-log can contain `search_results_returned` events without the S4 coverage counts, and the
-importer validates strictly, so such entries are rejected with their position instead of
-being silently rewritten or dropped; reconciling that historical log is a separate
-decision. Merchant-self classification exists and is tested, but nothing detects
-authenticated merchant requests yet (S6). `stores.catalog_path` remains as an unused S2
-column because SQLite has no idempotent `DROP COLUMN`; no code reads or writes it.
-Served media is a local content-addressed filesystem store; backup, restore and media
+JSONL telemetry remains only for the retired Issue #1 fixture slice; the platform
+storefront writes to the database. `data/local/pitch-telemetry.jsonl` (gitignored) is a
+historical, incompatible local artifact: it contains pre-S4 `search_results_returned`
+events without the S4 coverage counts, so it is not migrated into the database, no
+importer bypass exists and its events are not rewritten. `stores.catalog_path` remains
+as an unused S2 column because SQLite has no idempotent `DROP COLUMN`; no code reads or
+writes it. Merchant sessions are deliberate and store-scoped; the `Secure` merchant
+cookie means a browser only accepts it over HTTPS or a localhost origin, so plain-HTTP
+acceptance tests use the WSGI test client with an `https://` base URL while the
+unauthenticated redirect is also exercised over real loopback HTTP. Login throttling is
+process-local by design for the one-process runtime, there is no account deletion,
+roles, self-service signup, or email, and `/manage` is read-only in this slice. Served
+media is a local content-addressed filesystem store; backup, restore and media
 synchronisation are S10.
 Funnel reporting covers recorded local demo and store traffic only; public-telemetry
 retention, access and notice decisions remain unresolved.
@@ -174,16 +201,18 @@ content-addressed media and idempotent demo import replace the runtime JSON cata
 S4 is implemented: per-item embeddings, index state, a generation-keyed vector cache,
 truthful coverage counts and disclosure, and the bounded-retry indexer with its CLI.
 S5 is implemented: store-scoped, validated telemetry on the platform substrate with
-per-store reporting and explicit traffic classes. S6-S10 are not implemented yet.
+per-store reporting and explicit traffic classes. S6 is implemented: founder-provisioned
+merchant accounts, store-scoped sessions, CSRF-protected sign-in/out, the read-only
+management shell and merchant-self traffic classification. S7-S10 are not implemented
+yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S6 in `docs/SLICES.md`: founder-provisioned merchant accounts, sessions and an
-authenticated management shell. Execute only S6; its acceptance criteria and non-goals
-are in the slice register, and the escalation rules in AGENTS apply. Do not pull later
-slices forward.
+S7 in `docs/SLICES.md`: mobile publish (photo plus price) behind the authenticated
+merchant shell. Execute only S7; its acceptance criteria and non-goals are in the slice
+register, and the escalation rules in AGENTS apply. Do not pull later slices forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

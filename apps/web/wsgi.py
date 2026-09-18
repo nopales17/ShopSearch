@@ -21,13 +21,16 @@ from typing import Any, Iterable, Mapping
 import waitress
 from flask import Flask, Response, request
 
+from apps.web.manage import MerchantShell, ShellResponse
 from apps.web.pitch_server import PitchApplication, build_pitch_application, open_demo_stack
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION
+from backend.auth.service import MERCHANT_COOKIE
 from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
 from backend.search.multimodal import TextEncoder
 from backend.search.vector_source import VectorCache
 from backend.stores.resolver import HostResolver, load_development_hosts
-from contracts.store import StoreScope
+from contracts.auth import MerchantIdentity
+from contracts.store import Store, StoreScope
 
 
 def _request_target(environ: Mapping[str, Any]) -> str:
@@ -105,10 +108,15 @@ class _RequestBoundary(BaseHTTPRequestHandler):
         return self._body.getvalue()
 
 
-def _dispatch(application: PitchApplication, environ: Mapping[str, Any]) -> Response:
+def _dispatch(
+    application: PitchApplication,
+    environ: Mapping[str, Any],
+    *,
+    merchant: MerchantIdentity | None = None,
+) -> Response:
     boundary = _RequestBoundary.from_environ(environ)
     try:
-        application._handle(boundary)
+        application._handle(boundary, merchant=merchant)
     except ValueError:
         application._respond(
             boundary,
@@ -136,6 +144,21 @@ def _plain(status: HTTPStatus, body: str) -> Response:
     response = Response(body, status=status, content_type="text/plain; charset=utf-8")
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _shell_response(result: ShellResponse) -> Response:
+    """Render a merchant-shell response; never cache authenticated pages."""
+
+    response = Response(result.body, status=result.status, content_type=result.content_type)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if result.location is not None:
+        response.headers["Location"] = result.location
+    for cookie in result.cookies:
+        response.headers.add("Set-Cookie", cookie)
+    for name, value in result.headers:
+        response.headers.add(name, value)
     return response
 
 
@@ -169,7 +192,23 @@ def create_pitch_app(
         stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
     )
     applications: dict[str, PitchApplication] = {}
+    shells: dict[str, MerchantShell] = {}
     application_lock = threading.Lock()
+
+    def shell_for(store: Store) -> MerchantShell:
+        with application_lock:
+            existing = shells.get(store.store_id)
+            if existing is not None:
+                return existing
+            shell = MerchantShell(
+                store,
+                stack.auth_stores.for_store(store),
+                stack.catalog_repository,
+                model_id=MODEL_ID,
+                model_revision=MODEL_REVISION,
+            )
+            shells[store.store_id] = shell
+            return shell
 
     def application_for(scope: StoreScope) -> PitchApplication | None:
         if scope.store_id not in provisioned:
@@ -197,16 +236,37 @@ def create_pitch_app(
     app = Flask(__name__, static_folder=None)
     app.url_map.merge_slashes = False
 
-    @app.route("/", defaults={"path": ""}, methods=["GET"])
-    @app.route("/<path:path>", methods=["GET"])
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+
+    @app.route("/", defaults={"path": ""}, methods=["GET", "POST"])
+    @app.route("/<path:path>", methods=["GET", "POST"])
     def dispatch(path: str) -> Response:
         scope = resolver.resolve(request.environ.get("HTTP_HOST"))
         if scope is None:
             return _plain(HTTPStatus.NOT_FOUND, "Not found")
+        if scope.store_id not in provisioned:
+            return _plain(HTTPStatus.NOT_FOUND, "Not found")
+        store = stack.store_repository.find_store(scope)
+        if store is None:
+            return _plain(HTTPStatus.NOT_FOUND, "Not found")
+        auth = stack.auth_stores.for_store(store)
+        raw_cookie = request.cookies.get(MERCHANT_COOKIE)
+        session = auth.identify(raw_cookie) if raw_cookie else None
+        if shell_for(store).handles(request.path):
+            return _shell_response(
+                shell_for(store).handle(
+                    method=request.method,
+                    path=request.path,
+                    cookies=request.cookies,
+                    form=request.form,
+                )
+            )
         application = application_for(scope)
         if application is None:
             return _plain(HTTPStatus.NOT_FOUND, "Not found")
-        return _dispatch(application, request.environ)
+        return _dispatch(
+            application, request.environ, merchant=None if session is None else session.identity
+        )
 
     app.extensions["shopsearch_stack"] = stack
     return app

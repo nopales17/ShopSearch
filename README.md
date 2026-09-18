@@ -88,6 +88,22 @@ The evaluator uses frozen pre-retrieval labels and writes a timestamped result u
 The baseline passed its narrow pitch gate; vague queries are uneven, unrelated
 queries still return neighbors, and manually tagged lexical search scored higher.
 
+## Merchant shell (local)
+
+Founder-provisioned merchant accounts sign in at `/manage/login`; `/manage` lists the
+store's items with their listing and index state and is read-only in this slice.
+
+```sh
+.venv/bin/python -m backend.auth.cli --store-id pitch-demo create --username alice
+.venv/bin/python -m backend.auth.cli --store-id pitch-demo list
+.venv/bin/python -m backend.auth.cli --store-id pitch-demo disable --username alice
+.venv/bin/python -m backend.auth.cli --store-id pitch-demo reset --username alice
+```
+
+Passwords are entered at an interactive prompt and never as arguments. The merchant
+cookie is `Secure`, so browsers accept it on a localhost origin over http while any other
+host needs HTTPS. See `docs/CREDENTIALS.md` for session, CSRF and throttling details.
+
 ## Run the Issue #1 fixture slice
 
 This local slice uses only explicitly marked demo/test fixtures. It is not Customer Zero inventory, does not show product photos, and uses deterministic token matching rather than semantic retrieval.
