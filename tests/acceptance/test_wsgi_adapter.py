@@ -71,7 +71,6 @@ class WsgiRouteContractTest(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.server = create_pitch_server(
             port=0,
-            telemetry_path=Path(self.directory.name) / "events.jsonl",
             encoder=StubEncoder(),
             database_path=Path(self.directory.name) / "store.sqlite3",
             media_root=Path(self.directory.name) / "media",
@@ -130,14 +129,12 @@ class LegacyParityTest(unittest.TestCase):
         root = Path(self.directory.name)
         self.legacy = create_legacy_server(
             port=0,
-            telemetry_path=root / "legacy.jsonl",
             encoder=StubEncoder(),
             database_path=root / "legacy-store.sqlite3",
             media_root=root / "legacy-media",
         )
         self.wsgi = create_pitch_server(
             port=0,
-            telemetry_path=root / "wsgi.jsonl",
             encoder=StubEncoder(),
             database_path=root / "wsgi-store.sqlite3",
             media_root=root / "wsgi-media",

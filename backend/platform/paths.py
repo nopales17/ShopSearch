@@ -11,3 +11,4 @@ DEFAULT_DEVELOPMENT_HOSTS_PATH = REPOSITORY_ROOT / "config" / "development_hosts
 DEFAULT_DEMO_STORE_PATH = REPOSITORY_ROOT / "data" / "stores" / "pitch-demo.json"
 DEFAULT_DEMO_DATASET_PATH = REPOSITORY_ROOT / "data" / "pitch" / "catalog.json"
 DEFAULT_DEMO_INDEX_PATH = REPOSITORY_ROOT / "data" / "pitch" / "image_index.json"
+DEFAULT_TELEMETRY_PATH = REPOSITORY_ROOT / "data" / "local" / "pitch-telemetry.jsonl"

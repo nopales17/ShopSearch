@@ -36,6 +36,7 @@ class MigrationTest(unittest.TestCase):
                     "0001_store_registry.sql",
                     "0002_catalog_and_media.sql",
                     "0003_embeddings_and_index_generations.sql",
+                    "0004_telemetry_events.sql",
                 )
                 self.assertEqual(applied, migrations)
                 self.assertEqual(
@@ -57,6 +58,7 @@ class MigrationTest(unittest.TestCase):
                         "item_events",
                         "embeddings",
                         "store_generations",
+                        "telemetry_events",
                     },
                     tables,
                 )
@@ -241,6 +243,7 @@ class PersistenceImportBoundaryTest(unittest.TestCase):
         "backend/platform/db.py",
         "backend/stores/repository.py",
         "backend/catalog/store_repository.py",
+        "backend/telemetry/sqlite_store.py",
     }
 
     def test_sqlite3_and_connection_factory_stay_in_the_persistence_layer(self) -> None:

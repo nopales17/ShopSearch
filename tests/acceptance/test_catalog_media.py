@@ -82,7 +82,6 @@ class CatalogMediaHttpTest(unittest.TestCase):
                 self.demo_media_url = demo_item.image_uri
         self.server = create_pitch_server(
             port=0,
-            telemetry_path=root / "events.jsonl",
             encoder=StubEncoder(),
             database_path=database_path,
             media_root=self.media_root,

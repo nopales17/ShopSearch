@@ -1,7 +1,9 @@
-"""Read-only aggregate report for validated local demo telemetry JSONL.
+"""Read-only aggregate reports over validated telemetry.
 
-Counts describe recorded local demo interactions only. They are not people,
-purchases, availability, demand or customer-value evidence.
+Counts describe recorded interactions only. They are not people, purchases,
+availability, demand or customer-value evidence. `summarize()` keeps its original
+demo semantics; `summarize_store()` adds store-scoped reporting where customer
+denominators exclude demo/fixture and merchant-self traffic.
 """
 
 from __future__ import annotations
@@ -10,13 +12,17 @@ import argparse
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
-from contracts.telemetry import EventType
+from backend.platform.paths import DEFAULT_DATABASE_PATH
+from backend.stores.repository import StoreRepository
+from backend.telemetry.sqlite_store import TelemetryStores
+from contracts.store import StoreScope
+from contracts.telemetry import EventType, TelemetrySink, TrafficClass
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_TELEMETRY_PATH = ROOT / "data/local/pitch-telemetry.jsonl"
+DEFAULT_STORE_ID = "pitch-demo"
 KNOWN_EVENT_TYPES = {kind.value for kind in EventType}
+DEMO_TRAFFIC_CLASSES = frozenset({TrafficClass.FIXTURE_TEST.value, TrafficClass.PITCH_DEMO.value})
 
 
 def load_events(path: Path) -> list[dict[str, Any]]:
@@ -133,6 +139,37 @@ def _count(entries: list[dict[str, Any]], kind: EventType) -> int:
     return sum(1 for entry in entries if entry.get("event_type") == kind.value)
 
 
+def summarize_store(sink: TelemetrySink, store_id: str) -> dict[str, object]:
+    """Per-store report over a store-scoped sink.
+
+    Customer denominators count live customer traffic only; demo/fixture and
+    merchant-self traffic are reported separately and never as customer traffic.
+    """
+
+    events = sink.events()
+    traffic_counts = Counter(_traffic(entry) for entry in events)
+    customer_events = [entry for entry in events if _traffic(entry) == TrafficClass.CUSTOMER.value]
+    demo_events = [entry for entry in events if _traffic(entry) in DEMO_TRAFFIC_CLASSES]
+    return {
+        "store_id": store_id,
+        "recorded_events": len(events),
+        "traffic": {name: traffic_counts[name] for name in sorted(traffic_counts)},
+        "customer": summarize(customer_events),
+        "demo": summarize(demo_events),
+        "merchant_self_events": traffic_counts.get(TrafficClass.MERCHANT_SELF.value, 0),
+        "denominators": (
+            "customer counts only live customer traffic; demo/fixture and merchant-self "
+            "traffic are excluded from customer denominators and reported separately"
+        ),
+        "notes": [
+            "Counts describe recorded interactions, not people, visits, calls or purchases.",
+            "Merchant-self traffic is excluded from customer denominators.",
+            "Demo and fixture traffic is never reported as live customer traffic.",
+            "No count establishes availability, demand or customer value.",
+        ],
+    }
+
+
 def _search_pairs(entries: list[dict[str, Any]], kind: EventType) -> set[tuple[str, str]]:
     return {
         (str(entry["session_id"]), str(entry["search_id"]))
@@ -181,17 +218,40 @@ def _rate(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 4) if denominator else None
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Summarize local ShopSearch demo telemetry. Counts are not customer-value evidence."
+        description=(
+            "Summarize recorded ShopSearch telemetry. Counts are not customer-value evidence."
+        )
     )
-    parser.add_argument("--telemetry-path", type=Path, default=DEFAULT_TELEMETRY_PATH)
-    arguments = parser.parse_args()
+    parser.add_argument("--store-id", default=DEFAULT_STORE_ID)
+    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE_PATH)
+    parser.add_argument(
+        "--telemetry-path",
+        type=Path,
+        help="read a legacy JSONL log instead of the store-scoped database",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = build_parser()
+    arguments = parser.parse_args(argv)
+    if arguments.telemetry_path is not None:
+        try:
+            events = load_events(arguments.telemetry_path)
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
+        print(json.dumps(summarize(events), indent=2, sort_keys=True))
+        return
     try:
-        events = load_events(arguments.telemetry_path)
-    except (OSError, ValueError) as error:
+        with StoreRepository.open(arguments.database) as stores:
+            store = stores.get_store(StoreScope(arguments.store_id))
+            with TelemetryStores.open(arguments.database) as telemetry:
+                report = summarize_store(telemetry.for_store(store), store.store_id)
+    except (OSError, ValueError, LookupError) as error:
         parser.error(str(error))
-    print(json.dumps(summarize(events), indent=2, sort_keys=True))
+    print(json.dumps(report, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

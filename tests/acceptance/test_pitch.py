@@ -11,20 +11,21 @@ from urllib.parse import quote, urlencode
 from urllib.request import HTTPCookieProcessor, build_opener
 
 from apps.web.wsgi import create_pitch_server
-from backend.telemetry.jsonl_store import JsonlTelemetryStore
+from backend.stores.repository import StoreRepository
 from backend.telemetry.report import summarize
+from backend.telemetry.sqlite_store import TelemetryStores
+from contracts.store import StoreScope
 from tests.unit.test_pitch import StubEncoder
 
 
 class PitchHttpTest(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
-        self.log = Path(self.directory.name) / "pitch.jsonl"
+        self.database_path = Path(self.directory.name) / "store.sqlite3"
         self.server = create_pitch_server(
             port=0,
-            telemetry_path=self.log,
             encoder=StubEncoder(),
-            database_path=Path(self.directory.name) / "store.sqlite3",
+            database_path=self.database_path,
             media_root=Path(self.directory.name) / "media",
         )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -42,6 +43,12 @@ class PitchHttpTest(unittest.TestCase):
         with self.client.open(self.url + path, timeout=3) as response:
             return response.read()
 
+    def events(self) -> list[dict[str, object]]:
+        with StoreRepository.open(self.database_path) as stores:
+            store = stores.get_store(StoreScope("pitch-demo"))
+        with TelemetryStores.open(self.database_path) as telemetry:
+            return telemetry.for_store(store).events()
+
     def test_home_search_photo_item_and_simulated_actions(self) -> None:
         self.assertIn(b"See What's In Store", self.get("/"))
         self.assertIn(b"search-form", self.get("/catalog"))
@@ -49,7 +56,7 @@ class PitchHttpTest(unittest.TestCase):
         self.assertTrue(photo.startswith(b"\xff\xd8"))
         result = json.loads(self.get("/api/search?q=" + quote("small blue under $50")))
         self.assertIn("Under $50", result["filter_label"])
-        events = JsonlTelemetryStore(self.log, "pitch_demo").events()
+        events = self.events()
         returned = next(e for e in events if e["event_type"] == "search_results_returned")
         item_id = returned["payload"]["results"][0]["item_id"]
         self.get(f"/items/{item_id}?" + urlencode({"search_id": result["search_id"]}))
@@ -63,7 +70,7 @@ class PitchHttpTest(unittest.TestCase):
                 )
             )
             self.assertFalse(action["contacted_business"])
-        events = JsonlTelemetryStore(self.log, "pitch_demo").events()
+        events = self.events()
         related = [e for e in events if e["search_id"]]
         self.assertEqual(
             len({(e["session_id"], e["store_id"], e["search_id"]) for e in related}), 1
@@ -100,7 +107,7 @@ class PitchHttpTest(unittest.TestCase):
         self.assertEqual(result["count"], 0)
         self.assertIn(
             "zero_results",
-            [e["event_type"] for e in JsonlTelemetryStore(self.log, "pitch_demo").events()],
+            [e["event_type"] for e in self.events()],
         )
         for path in [
             "/images/../catalog.json",

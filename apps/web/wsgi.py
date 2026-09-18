@@ -140,7 +140,6 @@ def _plain(status: HTTPStatus, body: str) -> Response:
 
 
 def create_pitch_app(
-    telemetry_path: Path | None = None,
     encoder: TextEncoder | None = None,
     database_path: Path | None = None,
     development_hosts_path: Path | None = None,
@@ -189,7 +188,7 @@ def create_pitch_app(
                 stack.image_store,
                 vector_cache,
                 stack.index_path,
-                telemetry_path,
+                stack.telemetry_stores.for_store(store),
                 encoder,
             )
             applications[scope.store_id] = application
@@ -256,7 +255,6 @@ class WaitressServer:
 
 def create_pitch_server(
     port: int = 8000,
-    telemetry_path: Path | None = None,
     encoder: TextEncoder | None = None,
     host: str = "127.0.0.1",
     database_path: Path | None = None,
@@ -268,7 +266,6 @@ def create_pitch_server(
 
     return WaitressServer(
         create_pitch_app(
-            telemetry_path,
             encoder,
             database_path,
             development_hosts_path,
@@ -285,9 +282,8 @@ def main() -> None:
         description="Run the generic photographic pitch demo on the production WSGI adapter."
     )
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--telemetry-path", type=Path)
     arguments = parser.parse_args()
-    server = create_pitch_server(arguments.port, arguments.telemetry_path)
+    server = create_pitch_server(arguments.port)
     print(f"Pitch demo ready: http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever()

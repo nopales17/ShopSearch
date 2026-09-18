@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from apps.web import pitch_views as views
-from apps.web.server import ROOT, STATIC_ROOT, WebApplication
+from apps.web.server import STATIC_ROOT, WebApplication
 from backend.adapters.clip import MODEL_ID, MODEL_REVISION, ClipEncoder
 from backend.catalog.pitch_import import import_pitch_dataset
 from backend.catalog.read_model import LoadedCatalog
@@ -39,10 +39,11 @@ from backend.search.price import parse_price
 from backend.search.vector_source import DatabaseVectorSource, VectorCache
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
-from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
+from backend.telemetry.jsonl_store import new_event
+from backend.telemetry.sqlite_store import TelemetryStores
 from contracts.search import SearchQuery, SearchService
 from contracts.store import Store, StoreScope
-from contracts.telemetry import EventType
+from contracts.telemetry import EventType, TelemetrySink
 
 # The demo store keeps its P1 telemetry classification (ADR-0005 §8).
 DEMO_TRAFFIC = "pitch_demo"
@@ -57,12 +58,14 @@ class StorefrontStack:
     image_store: ImageStore
     store: Store
     index_path: Path
+    telemetry_stores: TelemetryStores
 
     def close(self) -> None:
         """Release backend connections; safe to call more than once."""
 
         self.catalog_repository.close()
         self.store_repository.close()
+        self.telemetry_stores.close()
 
 
 def open_demo_stack(
@@ -72,6 +75,7 @@ def open_demo_stack(
 
     store_repository = StoreRepository.open(database_path or DEFAULT_DATABASE_PATH)
     catalog_repository = CatalogRepository.open(database_path or DEFAULT_DATABASE_PATH)
+    telemetry_stores = TelemetryStores.open(database_path or DEFAULT_DATABASE_PATH)
     image_store = LocalImageStore(media_root or DEFAULT_MEDIA_ROOT)
     store = seed_store(store_repository, DEFAULT_DEMO_STORE_PATH)
     import_pitch_dataset(catalog_repository, image_store, DEFAULT_DEMO_DATASET_PATH, store)
@@ -83,7 +87,12 @@ def open_demo_stack(
         model_revision=MODEL_REVISION,
     )
     return StorefrontStack(
-        store_repository, catalog_repository, image_store, store, DEFAULT_DEMO_INDEX_PATH
+        store_repository,
+        catalog_repository,
+        image_store,
+        store,
+        DEFAULT_DEMO_INDEX_PATH,
+        telemetry_stores,
     )
 
 
@@ -91,7 +100,7 @@ class PitchApplication(WebApplication):
     def __init__(
         self,
         catalog: LoadedCatalog,
-        telemetry: JsonlTelemetryStore,
+        telemetry: TelemetrySink,
         search: SearchService,
         store: Store,
         scope: StoreScope,
@@ -289,7 +298,7 @@ def build_pitch_application(
     image_store: ImageStore,
     vector_cache: VectorCache,
     index_path: Path,
-    telemetry_path: Path | None = None,
+    telemetry: TelemetrySink,
     encoder: TextEncoder | None = None,
 ) -> PitchApplication:
     catalog = catalog_repository.loaded_catalog(store)
@@ -297,9 +306,6 @@ def build_pitch_application(
     encoder = encoder or ClipEncoder()
     service = MultimodalSearchService(catalog, vector_source, encoder)
     encoder.text("glass")  # Warm inference at startup, not from the fixed query list.
-    telemetry = JsonlTelemetryStore(
-        telemetry_path or ROOT / "data/local/pitch-telemetry.jsonl", traffic=DEMO_TRAFFIC
-    )
     return PitchApplication(
         catalog, telemetry, service, store, scope, catalog_repository, image_store, index_path
     )
@@ -326,7 +332,6 @@ class StorefrontHttpServer(ThreadingHTTPServer):
 
 def create_pitch_server(
     port: int = 8000,
-    telemetry_path: Path | None = None,
     encoder: TextEncoder | None = None,
     database_path: Path | None = None,
     media_root: Path | None = None,
@@ -335,6 +340,7 @@ def create_pitch_server(
     vector_cache = VectorCache(
         stack.catalog_repository, model_id=MODEL_ID, model_revision=MODEL_REVISION
     )
+    telemetry = stack.telemetry_stores.for_store(stack.store)
     application = build_pitch_application(
         stack.store,
         stack.store.scope,
@@ -342,7 +348,7 @@ def create_pitch_server(
         stack.image_store,
         vector_cache,
         stack.index_path,
-        telemetry_path,
+        telemetry,
         encoder,
     )
     return StorefrontHttpServer(("127.0.0.1", port), application.handler(), stack)
@@ -351,9 +357,8 @@ def create_pitch_server(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the generic photographic pitch demo locally.")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--telemetry-path", type=Path)
     args = parser.parse_args()
-    server = create_pitch_server(args.port, args.telemetry_path)
+    server = create_pitch_server(args.port)
     print(f"Pitch demo ready: http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever()

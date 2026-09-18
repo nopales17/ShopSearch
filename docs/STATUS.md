@@ -41,9 +41,19 @@ regardless of index state, visual-text retrieval ranks only ready items, the sto
 discloses the excluded count with a browse path, and `search_results_returned` records
 published/ready/excluded counts. `backend/search/indexer.py` is the single-purpose
 indexer with bounded retries, backoff and an attempt cap, plus a reindex CLI.
+S5 moved platform telemetry onto the store-scoped database: `telemetry_events` rows are
+append-only with the required `(store_id, search_id)` and `(store_id, occurred_at)`
+indexes, written through a `TelemetrySink` implemented by `SqliteTelemetryStore`. The
+event contract, duplicate handling, search/session/store/catalog attribution and the S4
+coverage fields are unchanged and validated before any row is written; demo/fixture,
+live customer and merchant-self traffic are explicit classes, and a store's rows cannot
+cross its scope. `summarize()` keeps its demo semantics and a new per-store report
+excludes demo/fixture and merchant-self traffic from customer denominators. A JSONL
+import path replays a legacy demo log with identical event IDs, and the storefront now
+writes through the sink instead of the local JSONL log.
 
 ## Verification
-104 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
+117 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
 restart persistence, invalid/foreign attribution rejection, catalog validation,
 concurrent duplicate-safe event writes, and S1 route/response-header/session-cookie
 parity with a byte-for-byte legacy-versus-WSGI comparison of deterministic routes.
@@ -78,10 +88,18 @@ Warm search latency over the demo store was measured locally on 2026-09-18 (Pyth
 source with the in-process cache, excluding HTTP and telemetry): p50 1.87 ms, p95
 2.96 ms, max 3.34 ms over 85 warm searches. This is a local measurement under those
 conditions, not an SLA or evidence of customer value.
+S5 adds sink tests for identical-duplicate tolerance, conflicting-ID rejection,
+store-scope and traffic-class enforcement (including merchant_self), foreign session,
+store and catalog-version attribution rejection, the preserved S4 coverage validation
+and the required telemetry indexes; isolation tests proving demo and live stores never
+share a report and that merchant-self traffic is excluded from customer denominators;
+and an import test proving `summarize()` over imported demo events is identical to
+`summarize()` over the source events, including the committed expected counts.
 Compilation, Ruff lint/format and mypy pass on Python 3.12. Browser form submission and
 item detail were manually checked. The documented `make serve` target was smoke-tested
 with the pinned CLIP runtime over loopback (`/health` and a price-bounded search). CI
-uses the same checks on Python 3.11/3.12; remote CI has not been run in this pass.
+runs the same checks on Python 3.11/3.12; the S4 commit c37985f passed both the 3.11
+and 3.12 jobs (earlier results are in the GitHub Actions history).
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
@@ -108,22 +126,28 @@ overlap. Explicit service price/category filters work; natural-language price pa
 and customer filters are now available in P1's separate pitch mode. Fixture source
 records are synthetic, resolvable observations; catalog-owned public snapshots assert
 no stock.
-The catalog, media metadata, embeddings and generation counters now live in the same
-SQLite file as the registry, with store-scoped keys; telemetry is still JSONL. The
-committed CLIP index file is an import/parity source only, so after an image change the
-old vector stays `stale` (never ranked) until the indexer runs. Only the demo store is
-provisioned with a catalog in the composition, and a resolved store without one gets 404
-rather than another store's catalog (S9 hardens this with a second real store). The
-indexer is a component plus a CLI, not a daemon thread: S4 has no runtime producer of
-pending items because merchant uploads arrive in S7, and no generic job framework is
-introduced. Coverage counts and disclosure wording come from the store record, but the
-notice itself renders client-side from the search response so the server-rendered page
-bytes stay unchanged. `stores.catalog_path` remains as an unused S2 column because
-SQLite has no idempotent `DROP COLUMN`; no code reads or writes it. Served media is a
-local content-addressed filesystem store; backup, restore and media synchronisation are
-S10.
-Funnel reporting covers persisted local demo traffic only; public-telemetry retention,
-access and notice decisions remain unresolved.
+The catalog, media metadata, embeddings, generation counters and telemetry now live in
+the same SQLite file as the registry, with store-scoped keys. The committed CLIP index
+file is an import/parity source only, so after an image change the old vector stays
+`stale` (never ranked) until the indexer runs. Only the demo store is provisioned with a
+catalog in the composition, and a resolved store without one gets 404 rather than another
+store's catalog (S9 hardens this with a second real store). The indexer is a component
+plus a CLI, not a daemon thread: S4 has no runtime producer of pending items because
+merchant uploads arrive in S7, and no generic job framework is introduced. Coverage
+counts and disclosure wording come from the store record, but the notice itself renders
+client-side from the search response so the server-rendered page bytes stay unchanged.
+JSONL telemetry remains only for the retired Issue #1 fixture slice and for reading
+historical local logs; the platform storefront writes to the database. A pre-S4 JSONL
+log can contain `search_results_returned` events without the S4 coverage counts, and the
+importer validates strictly, so such entries are rejected with their position instead of
+being silently rewritten or dropped; reconciling that historical log is a separate
+decision. Merchant-self classification exists and is tested, but nothing detects
+authenticated merchant requests yet (S6). `stores.catalog_path` remains as an unused S2
+column because SQLite has no idempotent `DROP COLUMN`; no code reads or writes it.
+Served media is a local content-addressed filesystem store; backup, restore and media
+synchronisation are S10.
+Funnel reporting covers recorded local demo and store traffic only; public-telemetry
+retention, access and notice decisions remain unresolved.
 
 ## Current objective
 Build the reusable store-scoped platform machinery that the Customer Zero release will be
@@ -148,16 +172,17 @@ behavior and tests. S3 is implemented: the store-scoped mutable catalog, listing
 content-addressed media and idempotent demo import replace the runtime JSON catalog.
 S4 is implemented: per-item embeddings, index state, a generation-keyed vector cache,
 truthful coverage counts and disclosure, and the bounded-retry indexer with its CLI.
-S5-S10 are not implemented yet.
+S5 is implemented: store-scoped, validated telemetry on the platform substrate with
+per-store reporting and explicit traffic classes. S6-S10 are not implemented yet.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-S5 in `docs/SLICES.md`: move telemetry to the store-scoped database, preserving the
-event contract and every validation rule. Execute only S5; its acceptance criteria and
-non-goals are in the slice register, and the escalation rules in AGENTS apply. Do not
-pull later slices forward.
+S6 in `docs/SLICES.md`: founder-provisioned merchant accounts, sessions and an
+authenticated management shell. Execute only S6; its acceptance criteria and non-goals
+are in the slice register, and the escalation rules in AGENTS apply. Do not pull later
+slices forward.
 
 In parallel and founder-owned, not an agent task: record the prospective owner's stated
 requirements, objections, pricing discussion and permission

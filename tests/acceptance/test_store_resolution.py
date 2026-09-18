@@ -34,7 +34,6 @@ class HostResolutionHttpTest(unittest.TestCase):
             repository.add_domain(store.scope, "shop.example.com")
         self.server = create_pitch_server(
             port=0,
-            telemetry_path=root / "events.jsonl",
             encoder=StubEncoder(),
             database_path=database_path,
             development_hosts_path=development_hosts,

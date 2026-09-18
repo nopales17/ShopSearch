@@ -4,9 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
-from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
+from backend.platform.paths import DEFAULT_DEMO_STORE_PATH
+from backend.stores.repository import StoreRepository
+from backend.stores.seed import seed_store
+from backend.telemetry.jsonl_store import new_event
 from backend.telemetry.report import load_events, summarize
+from backend.telemetry.sqlite_store import TelemetryStores
 from contracts.telemetry import EventType
 
 
@@ -17,37 +22,74 @@ def _event(
     search_id: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """A contract-valid recorded demo event snapshot."""
+
+    values: dict[str, Any] = {"traffic": "pitch_demo"}
+    if event_type == "search_submitted":
+        values.update({"query": "", "filters": {}, "catalog_version": CATALOG_VERSION})
+    elif event_type == "search_results_returned":
+        values.update(
+            {
+                "catalog_version": CATALOG_VERSION,
+                "result_count": 1,
+                "results": [{"item_id": "item-1", "public_claim": "demo only", "rank": 1}],
+                "published_count": 1,
+                "ready_count": 1,
+                "excluded_unindexed_count": 0,
+            }
+        )
+    elif event_type == "item_opened":
+        values.update({"catalog_version": CATALOG_VERSION, "item_id": "item-1"})
+    elif event_type in ("call_clicked", "directions_clicked"):
+        values.update({"catalog_version": CATALOG_VERSION, "item_id": "item-1", "simulated": True})
     return {
-        "event_id": f"{event_type}-{session_id}-{search_id or 'none'}",
+        "event_id": str(uuid5(NAMESPACE_URL, f"{event_type}-{session_id}-{search_id or 'none'}")),
         "event_type": event_type,
         "occurred_at": "2026-09-17T12:00:00+00:00",
         "session_id": session_id,
         "store_id": "pitch-demo",
         "search_id": search_id,
-        "payload": {"traffic": "pitch_demo", **(payload or {})},
+        "payload": {**values, **(payload or {})},
     }
+
+
+CATALOG_VERSION = "catalog-v1"
+SESSION_1 = "11111111-1111-4111-8111-111111111111"
+SESSION_2 = "22222222-2222-4222-8222-222222222222"
+SESSION_3 = "33333333-3333-4333-8333-333333333333"
+SEARCH_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+SEARCH_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+
+
+def demo_events() -> list[dict[str, Any]]:
+    """The recorded demo interactions the committed report tests assert on."""
+
+    return [
+        _event("session_started", SESSION_1),
+        _event("homepage_viewed", SESSION_1),
+        _event("catalog_opened", SESSION_1),
+        _event(
+            "search_submitted",
+            SESSION_1,
+            search_id=SEARCH_A,
+            payload={"query": " Small   Blue One "},
+        ),
+        _event("search_results_returned", SESSION_1, search_id=SEARCH_A),
+        _event("item_opened", SESSION_1, search_id=SEARCH_A),
+        _event("call_clicked", SESSION_1, search_id=SEARCH_A),
+        _event("session_started", SESSION_2),
+        _event("homepage_viewed", SESSION_2),
+        _event("catalog_opened", SESSION_2),
+        _event("search_submitted", SESSION_2, search_id=SEARCH_B, payload={"query": "under $1"}),
+        _event("search_results_returned", SESSION_2, search_id=SEARCH_B),
+        _event("zero_results", SESSION_2, search_id=SEARCH_B),
+        _event("item_opened", SESSION_3),
+    ]
 
 
 class TelemetryReportTest(unittest.TestCase):
     def test_counts_defined_denominators_and_normalized_queries(self) -> None:
-        events = [
-            _event("session_started", "s1"),
-            _event("homepage_viewed", "s1"),
-            _event("catalog_opened", "s1"),
-            _event(
-                "search_submitted", "s1", search_id="a", payload={"query": " Small   Blue One "}
-            ),
-            _event("search_results_returned", "s1", search_id="a"),
-            _event("item_opened", "s1", search_id="a"),
-            _event("call_clicked", "s1", search_id="a"),
-            _event("session_started", "s2"),
-            _event("homepage_viewed", "s2"),
-            _event("catalog_opened", "s2"),
-            _event("search_submitted", "s2", search_id="b", payload={"query": "under $1"}),
-            _event("search_results_returned", "s2", search_id="b"),
-            _event("zero_results", "s2", search_id="b"),
-            _event("item_opened", "s3"),
-        ]
+        events = demo_events()
         report = summarize(events)
         self.assertEqual(
             report["counts"],
@@ -98,41 +140,47 @@ class TelemetryReportTest(unittest.TestCase):
         session_b = "22222222-2222-4222-8222-222222222222"
         search_id = "33333333-3333-4333-8333-333333333333"
         with tempfile.TemporaryDirectory() as directory:
-            store = JsonlTelemetryStore(Path(directory) / "events.jsonl", traffic="pitch_demo")
-            submitted = {
-                "traffic": "pitch_demo",
-                "query": "blue",
-                "filters": {},
-                "catalog_version": "catalog-v1",
-            }
-            for session_id in (session_a, session_b):
-                store.append(
-                    new_event(
-                        EventType.SEARCH_SUBMITTED,
-                        session_id,
-                        "pitch-demo",
-                        submitted,
-                        search_id,
-                    )
-                )
-            store.append(
-                new_event(
-                    EventType.SEARCH_RESULTS_RETURNED,
-                    session_b,
-                    "pitch-demo",
-                    {
+            database_path = Path(directory) / "shopsearch.sqlite3"
+            with StoreRepository.open(database_path) as stores:
+                store = seed_store(stores, DEFAULT_DEMO_STORE_PATH)
+                with TelemetryStores.open(database_path) as telemetry:
+                    sink = telemetry.for_store(store)
+                    submitted = {
                         "traffic": "pitch_demo",
+                        "query": "blue",
+                        "filters": {},
                         "catalog_version": "catalog-v1",
-                        "result_count": 1,
-                        "published_count": 1,
-                        "ready_count": 1,
-                        "excluded_unindexed_count": 0,
-                        "results": [{"item_id": "item-1", "public_claim": "demo only", "rank": 1}],
-                    },
-                    search_id,
-                )
-            )
-            report = summarize(store.events())
+                    }
+                    for session_id in (session_a, session_b):
+                        sink.append(
+                            new_event(
+                                EventType.SEARCH_SUBMITTED,
+                                session_id,
+                                "pitch-demo",
+                                submitted,
+                                search_id,
+                            )
+                        )
+                    sink.append(
+                        new_event(
+                            EventType.SEARCH_RESULTS_RETURNED,
+                            session_b,
+                            "pitch-demo",
+                            {
+                                "traffic": "pitch_demo",
+                                "catalog_version": "catalog-v1",
+                                "result_count": 1,
+                                "published_count": 1,
+                                "ready_count": 1,
+                                "excluded_unindexed_count": 0,
+                                "results": [
+                                    {"item_id": "item-1", "public_claim": "demo only", "rank": 1}
+                                ],
+                            },
+                            search_id,
+                        )
+                    )
+                    report = summarize(sink.events())
         self.assertEqual(report["counts"]["searches"], 2)
         self.assertEqual(report["counts"]["search_responses"], 1)
         self.assertEqual(report["counts"]["searches_missing_response"], 1)

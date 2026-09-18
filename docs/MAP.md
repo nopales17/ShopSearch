@@ -27,7 +27,7 @@ shopsearch/
 │   ├── catalog.py            item/observation/availability + listing/index/capture states
 │   ├── store.py              StoreScope + store record/presentation contracts
 │   ├── search.py             query/result contracts
-│   ├── telemetry.py          immutable interaction-event contracts
+│   ├── telemetry.py          immutable event contract, traffic classes, sink protocol
 │   └── decision.py           future evidence-aware recommendation contract
 ├── backend/
 │   ├── platform/             persistence layer: connection factory, migrations, paths
@@ -37,7 +37,7 @@ shopsearch/
 │   ├── stores/               store registry, hostname resolution, seed + provisioning CLI
 │   ├── search/               ranking + price parser; embedding source/cache; indexer + CLI
 │   ├── ingestion/            ingestion adapters
-│   ├── telemetry/            local append-only JSONL persistence + read-only report
+│   ├── telemetry/            store-scoped SQLite sink, JSONL import, read-only reports
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             local pinned CLIP encoder/model download
 ├── apps/
@@ -61,8 +61,8 @@ separate permitted photo dataset and provenance against the resolved store.
 `backend/search/placeholder.py`
 retains Issue #1 token ranking. `multimodal.py` ranks precomputed image vectors using
 the local CLIP adapter; `price.py` enforces supported price phrases independently.
-`backend/telemetry/jsonl_store.py` preserves correlated append-only events with distinct
-fixture_test/pitch_demo traffic. `apps/web/wsgi.py` is the production HTTP adapter: it
+`backend/telemetry/jsonl_store.py` preserves correlated append-only events for the retired
+Issue #1 fixture slice. `apps/web/wsgi.py` is the production HTTP adapter: it
 resolves the request Host, serves the photographic demo through a Flask application
 under Waitress and reuses the P1 composition. `pitch_server.py` retains that composition
 and the superseded stdlib entry point; `pitch_views.py` and static pitch CSS/JS provide
@@ -125,13 +125,22 @@ store-scoped SQLite catalog, media is content-addressed behind `ImageStore`, and
 storefront, browse, detail and media routes read through `CatalogRepository` and the
 media layer. S4 is implemented: per-item embeddings live in the store-scoped catalog,
 runtime retrieval reads them through a generation-keyed per-store cache, publication
-stays independent of index state, and coverage is disclosed and recorded. S5-S10 are
-not implemented: telemetry remains JSONL, and the committed CLIP index file is an
-import/parity source only.
+stays independent of index state, and coverage is disclosed and recorded. S5 is
+implemented: platform telemetry is store-scoped and validated, with per-store reporting
+that keeps demo/fixture and merchant-self traffic out of customer denominators. S6-S10
+are not implemented.
 
-`backend/telemetry/report.py` reads a persisted local event JSONL and prints
-deterministic demo funnel counts with explicit denominators. It does not infer
-availability, demand, customers or purchase outcomes, and it does not write telemetry.
+S5 moves platform telemetry to the store-scoped `telemetry_events` table (indexed on
+`(store_id, search_id)` and `(store_id, occurred_at)`). `backend/telemetry/validation.py`
+owns the shared event codec and rules (shape, S4 coverage counts, search attribution);
+`sqlite_store.py` provides `SqliteTelemetryStore`/`TelemetryStores` behind the
+`TelemetrySink` contract, rejecting foreign-store events and matching demo/live traffic
+classes to the store kind. `import_jsonl.py` replays a legacy JSONL log into the sink
+with identical event IDs, so `report.summarize()` reproduces earlier counts.
+`backend/telemetry/report.py` keeps the demo `summarize()` and adds `summarize_store()`,
+a per-store report whose customer denominators exclude demo/fixture and merchant-self
+traffic. Reports remain descriptive: it does not infer availability, demand, customers
+or purchase outcomes, and it does not write telemetry.
 
 `price.py` now supplies the small typed QueryPlan used by ranking and UI/telemetry.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion

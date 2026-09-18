@@ -62,21 +62,25 @@ warms text inference. The storefront is served by the Flask application in
 `apps/web/wsgi.py` under Waitress, the production HTTP adapter selected in ADR-0004;
 `make pitch` remains an alias. This remains a local demo, not a publicly hosted website.
 
-Pitch events persist separately to `data/local/pitch-telemetry.jsonl` with
-`pitch_demo` classification and store/session/search correlation. For another port/log:
+Storefront events persist to the platform database (`data/local/shopsearch.sqlite3`) in
+the store-scoped telemetry table, keeping the `pitch_demo` classification and
+store/session/search correlation. For another port:
 
 ```sh
-.venv/bin/python -m apps.web.wsgi --port 8018 --telemetry-path /tmp/pitch.jsonl
+.venv/bin/python -m apps.web.wsgi --port 8018
 make pitch-eval PYTHON=.venv/bin/python
 make report PYTHON=.venv/bin/python
 make check PYTHON=.venv/bin/python
 ```
 
-`make report` reads the local pitch event log and prints recorded demo counts with
+`make report` reads the `pitch-demo` store's recorded events and prints counts with
 explicit denominators, including `homepage_viewed` sessions, catalog opens, searches,
-zero-result searches, normalized queries and item/action clicks. It is a read-only
-local operator view: sessions are not people, clicks are not visits or purchases, and
-counts are not availability or customer-value evidence.
+zero-result searches, normalized queries and item/action clicks; `--store-id` selects
+another store, and `--telemetry-path` reads a legacy JSONL log. An older local log can
+be migrated with `.venv/bin/python -m backend.telemetry.import_jsonl`. It is a read-only
+local operator view: sessions are not people, clicks are not visits or purchases, demo
+and merchant-self traffic are reported separately from live customer traffic, and counts
+are not availability or customer-value evidence.
 
 The evaluator uses frozen pre-retrieval labels and writes a timestamped result under
 `data/local/pitch-evaluations/`, preserving committed history. See `experiments/search_v0/PITCH_PROTOCOL.md`,

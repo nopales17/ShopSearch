@@ -28,7 +28,7 @@ from backend.platform.paths import (
 from backend.search.embedding_import import import_pitch_embeddings
 from backend.stores.repository import StoreRepository
 from backend.stores.seed import seed_store
-from backend.telemetry.jsonl_store import JsonlTelemetryStore
+from backend.telemetry.sqlite_store import TelemetryStores
 from contracts.catalog import (
     CaptureTimeSource,
     EvidenceRef,
@@ -79,7 +79,6 @@ class CoverageHttpTestBase(unittest.TestCase):
                     self.add_pending_item(catalog, image_store, store)
         self.server = create_pitch_server(
             port=0,
-            telemetry_path=self.log,
             encoder=StubEncoder(),
             database_path=database_path,
             media_root=media_root,
@@ -167,7 +166,10 @@ class CoverageHttpTestBase(unittest.TestCase):
         return json.loads(body)
 
     def events(self) -> list[dict[str, Any]]:
-        return JsonlTelemetryStore(self.log, "pitch_demo").events()
+        with StoreRepository.open(self.database_path) as stores:
+            store = stores.get_store(StoreScope("pitch-demo"))
+        with TelemetryStores.open(self.database_path) as telemetry:
+            return telemetry.for_store(store).events()
 
 
 class PartiallyIndexedCoverageTest(CoverageHttpTestBase):

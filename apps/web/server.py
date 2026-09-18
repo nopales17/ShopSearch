@@ -17,14 +17,14 @@ from backend.search.placeholder import PlaceholderSearchService
 from backend.telemetry.jsonl_store import JsonlTelemetryStore, new_event
 from contracts.catalog import CatalogItem
 from contracts.search import SearchQuery, SearchService
-from contracts.telemetry import EventType
+from contracts.telemetry import EventType, TelemetrySink
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
 
 class WebApplication:
-    def __init__(self, catalog: LoadedCatalog, telemetry: JsonlTelemetryStore) -> None:
+    def __init__(self, catalog: LoadedCatalog, telemetry: TelemetrySink) -> None:
         self.catalog = catalog
         self.telemetry = telemetry
         self.search: SearchService = PlaceholderSearchService(catalog)
