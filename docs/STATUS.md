@@ -225,6 +225,16 @@ before indexing, price known→unknown→known changing bounded results, hide/un
 sold/relist each removing and restoring every customer surface with media retained,
 one indexer run reaching `ready`, image replacement (event+1/generation+1, media still
 served, old vector excluded) and a second indexer run rebinding the new image.
+S9 was verified by the two-store suite and by a bounded local smoke in which one Waitress
+process served both hostnames over loopback: both stores browsed and searched over their
+own three-item catalogs (`coverage` published=3/ready=3), both merchants signed in and
+saw only their own items in `/manage`, and every cross-host attempt failed closed —
+store-A-only and store-B-only item IDs 404ed on the other hostname, store A's media URL
+and hash 404ed on store B, store A's cookie yielded no identity on store B, an unknown
+and an unprovisioned hostname returned the store-free 404, store B's session with store
+A's CSRF token was rejected, and store B's session could not edit or hide a store-A-only
+item, leaving both stores' item/image/event counts and generation pairs unchanged. The
+S9 commit f9f8f67 passed both the 3.11 and 3.12 CI jobs.
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
