@@ -2,7 +2,9 @@
 
 Branding comes from the store record; no item content is rendered for a request that
 is not authenticated as that store's merchant. The item page carries the S8
-amend/hide/sold/replace controls, and demo stores stay read-only.
+amend/hide/sold/replace controls. A demo store stays read-only unless the explicit
+interactive local-demo capability is active, and even then only this merchant's own
+uploaded items are editable: committed museum records are not.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from urllib.parse import quote
 
 from backend.catalog.store_repository import ManagedItem
 from contracts.auth import MerchantIdentity
-from contracts.catalog import ListingState
+from contracts.catalog import IndexState, ListingState
 from contracts.store import Store
 
 LOGIN_PATH = "/manage/login"
@@ -38,7 +40,12 @@ NOTICE_MESSAGES = {
     "sold": "Item marked sold.",
     "relisted": "Item relisted.",
     "replaced": "Photo replaced; the old description search entry is cleared.",
+    "searchable": "This item is searchable by description now.",
 }
+
+INDEX_FAILED_NOTICE = (
+    "The description index could not be built. The item stays published and browsable."
+)
 
 _STYLE = (
     "*,*::before,*::after{box-sizing:border-box}"
@@ -68,11 +75,23 @@ def page(store: Store, title: str, body: str) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)} · {escape(store.display_name)}</title><style>{_STYLE}</style></head><body><header><strong>{wordmark}</strong><span>{escape(store.display_name)}</span></header><main>{body}</main></body></html>"""
 
 
-def login_page(store: Store, csrf_token: str) -> str:
+def login_page(
+    store: Store, csrf_token: str, *, demo_credentials: tuple[str, str] | None = None
+) -> str:
+    """Sign-in page; the local demo credential appears only under the demo capability."""
+
+    demo_note = (
+        '<p class="note">Local demonstration credential: '
+        f"<code>{escape(demo_credentials[0])}</code> / "
+        f"<code>{escape(demo_credentials[1])}</code></p>"
+        if demo_credentials is not None
+        else ""
+    )
     return page(
         store,
         "Sign in",
         f"""<h1>Sign in</h1><p class="note">Merchant access for {escape(store.display_name)}.</p>
+{demo_note}
 <form method="post" action="{LOGIN_PATH}"><input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
 <label>Username <input name="username" autocomplete="username" maxlength="64" required></label>
 <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
@@ -106,23 +125,31 @@ def manage_page(
     *,
     notice: str = "",
     error: str = "",
+    interactive_demo: bool = False,
+    published_item_id: str | None = None,
 ) -> str:
     unknown_price = store.presentation.price_unknown_label
-    editable = not store.is_demo
+    editable = interactive_demo or not store.is_demo
     rows = "".join(
         "<tr><td>{title}<br><small><code>{item_id}</code></small></td><td>{category}</td>"
-        "<td>{price}</td><td>{listing}</td><td>{index}</td>{actions}</tr>".format(
+        "<td>{price}</td><td>{listing}</td><td>{index}</td>{origin}{actions}</tr>".format(
             title=_item_link(store, item),
             item_id=escape(item.item_id),
             category=escape(item.category),
             price=escape(f"{item.price:.2f}" if item.price is not None else unknown_price),
             listing=escape(item.listing_state.value),
             index=escape(item.index_state.value),
-            actions=(f'<td><a href="{item_path(item.item_id)}">Edit</a></td>' if editable else ""),
+            origin=f"<td>{escape(_origin_label(item))}</td>" if interactive_demo else "",
+            actions=(
+                f'<td><a href="{item_path(item.item_id)}">Edit</a></td>'
+                if _item_is_manageable(item, editable=editable, interactive_demo=interactive_demo)
+                else ""
+            ),
         )
         for item in items
     )
     actions_head = "<th>Manage</th>" if editable else ""
+    origin_head = "<th>Origin</th>" if interactive_demo else ""
     publish_block = (
         f"""<section><h2>Add an item</h2>
 {"<p class='error' role='alert'>" + escape(error) + "</p>" if error else ""}
@@ -134,12 +161,14 @@ def manage_page(
 <label>Category (optional) <input name="category" maxlength="60"></label>
 <label class="check"><input type="checkbox" name="attested_capture" value="yes"> I just took this photo</label>
 <button type="submit">Publish</button></form></section>"""
-        if not store.is_demo
+        if interactive_demo or not store.is_demo
         else '<p class="note">This storefront is an illustrative demo, so it has no publish form.</p>'
     )
     status = ""
     if notice:
         status = f'<p class="ok" role="status">{escape(notice)}</p>'
+    if interactive_demo and published_item_id:
+        status += _published_notice(published_item_id, csrf_token)
     return page(
         store,
         "Manage",
@@ -149,8 +178,31 @@ def manage_page(
 {status}
 <p class="note">{len(items)} items in this store's represented catalog.</p>
 {publish_block}
-<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Listing state</th><th>Index state</th>{actions_head}</tr></thead><tbody>{rows}</tbody></table></div>""",
+<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Price</th><th>Listing state</th><th>Index state</th>{origin_head}{actions_head}</tr></thead><tbody>{rows}</tbody></table></div>""",
     )
+
+
+def _published_notice(item_id: str, csrf_token: str) -> str:
+    """Post-publication confirmation: open the storefront item or index on demand."""
+
+    target = item_path(item_id)
+    return f"""<section class="published"><h2>Published</h2>
+<p>It is in the storefront now. It appears in description search only after it is indexed.</p>
+<p><a href="/items/{escape(item_id)}">View in storefront</a></p>
+<form method="post" action="{target}/index"><input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
+<button type="submit">Make searchable now</button></form></section>"""
+
+
+def _item_is_manageable(item: ManagedItem, *, editable: bool, interactive_demo: bool) -> bool:
+    """Only a merchant's own uploaded item is editable inside the interactive demo."""
+
+    if not editable:
+        return False
+    return item.merchant_upload if interactive_demo else True
+
+
+def _origin_label(item: ManagedItem) -> str:
+    return "Your local upload" if item.merchant_upload else "Museum collection (read-only)"
 
 
 def item_page(
@@ -161,8 +213,14 @@ def item_page(
     *,
     notice: str = "",
     error: str = "",
+    interactive_demo: bool = False,
 ) -> str:
-    """One item's S8 controls: amend, hide/unhide, sold/relist, replace photo."""
+    """One item's S8 controls: amend, hide/unhide, sold/relist, replace photo.
+
+    Inside the interactive local demo these exist only for the merchant's own uploaded
+    items. A committed museum record renders a read-only page there, exactly as a demo
+    store does in every other composition.
+    """
 
     unknown_price = store.presentation.price_unknown_label
     price_value = "" if item.price is None else f"{item.price:.2f}"
@@ -177,12 +235,17 @@ def item_page(
         f"{escape(item.listing_state.value)} · index {escape(item.index_state.value)} · "
         f"{escape(unknown_price if item.price is None else price_value)}</p>"
     )
-    if store.is_demo:
+    if store.is_demo and not (interactive_demo and item.merchant_upload):
+        note = (
+            "This committed museum object is part of the read-only demo collection."
+            if interactive_demo
+            else "This storefront is an illustrative demo and cannot be edited."
+        )
         return page(
             store,
             "Item",
             f"<h1>{escape(item.title)}</h1>{summary}"
-            '<p class="note">This storefront is an illustrative demo and cannot be edited.</p>'
+            f'<p class="note">{escape(note)}</p>'
             f'<p><a href="{MANAGE_PATH}">Back to inventory</a></p>',
         )
     controls = "".join(
@@ -197,6 +260,7 @@ def item_page(
         if controls
         else ""
     )
+    index_block = _index_block(item, base, csrf_token) if interactive_demo else ""
     return page(
         store,
         item.title,
@@ -204,6 +268,7 @@ def item_page(
 {summary}
 {status}
 <p class="note">Signed in as {escape(identity.username)}.</p>
+{index_block}
 <section><h2>Edit details</h2>
 <form method="post" action="{base}/edit">
 <input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
@@ -220,6 +285,27 @@ def item_page(
 <button type="submit">Replace photo</button></form></section>
 <p><a href="{MANAGE_PATH}">Back to inventory</a></p>""",
     )
+
+
+def _index_block(item: ManagedItem, base: str, csrf_token: str) -> str:
+    """The interactive demo's explicit, separate indexing action."""
+
+    if item.index_state is IndexState.READY:
+        detail = "This item already has a valid description embedding."
+    elif item.index_state is IndexState.FAILED:
+        detail = (
+            "The last indexing attempt failed, so the item is not searchable by "
+            f"description. It stays published and browsable. {item.index_error or ''}"
+        )
+    else:
+        detail = (
+            "Uploaded items are browsable immediately, but description search uses a "
+            "separate embedding step."
+        )
+    return f"""<section><h2>Description search</h2>
+<p class="note">Index state: {escape(item.index_state.value)}. {escape(detail.strip())}</p>
+<form method="post" action="{base}/index"><input type="hidden" name="csrf_token" value="{escape(csrf_token)}">
+<button type="submit">Make searchable now</button></form></section>"""
 
 
 def item_path(item_id: str) -> str:

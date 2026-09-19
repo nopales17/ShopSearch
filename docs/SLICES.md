@@ -384,3 +384,103 @@ telemetry retention, access and notice decisions, which are founder-owned.
 - CI passes on Python 3.11 and 3.12.
 - `STATUS.md`, `MAP.md` and `ARCHITECTURE.md` describe the shipped state and claim no
   customer value, demand, adoption or availability.
+
+---
+
+## S11 — Interactive Form & Field merchant demo
+
+**Objective.** Extend only the explicit local Form & Field demo composition so one known
+local demo merchant can sign in, publish a photographed demo item, browse it before
+indexing, explicitly make pending items searchable using the existing indexer, and
+exercise the existing S8 edit/listing/photo-replacement lifecycle. Preserve the committed
+90-item museum corpus as read-only, truthfully distinguish its CMA/CC0 provenance from
+locally uploaded demo content, provide a deterministic isolated reset, and leave generic
+production startup and all S1–S10 semantics unchanged.
+
+**Scope.** An explicit in-memory interactive-demo capability passed only by
+`apps.web.demo` into the existing merchant composition; the local demonstration
+credential `demo`/`demo` provisioned through the unchanged S6 machinery; a dedicated
+ignored demo runtime root with `make demo` and `make demo-reset`; merchant mutation of
+uploaded demo items only (`attributes["merchant_upload"] is True`); a separate
+`Make searchable now` POST action that reuses `EmbeddingIndexer`; mixed
+museum/upload rendering with the minimum new store-presentation wording; and the
+documentation and tests that record all of it.
+
+**Out of scope.** A new architecture, schema migration, dependency or ADR; generic
+tenant or capability frameworks; any content-origin/provenance framework; production
+or deployed demo credentials; merchant signup, roles, billing or theming; deployment
+or external communication; search, ranking or retrieval redesign; a new embedding
+model; background workers, schedulers, daemons or a job queue; new telemetry event
+types; editing the committed museum source dataset; and any change to production demo
+or publication semantics.
+
+**Acceptance criteria.**
+- `make demo` starts the polished Form & Field storefront from the dedicated demo
+  database/media root and prints the storefront URL, `/manage/login`, and demo/demo.
+- `/manage/login` displays demo/demo only when the explicit interactive-demo capability
+  is active.
+- demo/demo signs in through unchanged PBKDF2, sessions, cookie, throttling and CSRF
+  machinery.
+- Generic `make serve`, `open_platform_stack()` and ordinary `create_pitch_app()` never
+  provision demo/demo and never enable demo mutation.
+- Even if a demo store and merchant account manually exist in generic composition, the
+  demo store remains read-only.
+- Initial pristine demo contains exactly the committed 90 items and 90 valid ready
+  embeddings, with existing IDs, prices, images, source URLs, licenses and museum
+  metadata unchanged.
+- A valid authenticated interactive-demo upload creates exactly one item, image, event
+  and catalog-generation bump; it is immediately browsable and remains pending.
+- Before indexing, visual-text search excludes the uploaded item and accurately reports
+  published/ready/excluded-unindexed coverage; browse/category/price paths continue to
+  include it according to existing semantics.
+- Publication leads to useful "View in storefront" and "Make searchable now" controls.
+- "Make searchable now" is POST-only, authenticated, CSRF-protected and only available
+  in the explicit interactive demo.
+- Successful indexing makes the uploaded item visually searchable without changing its
+  listing state or adding a second catalog event.
+- Indexing failure leaves the item published/browsable, records failed state/error and
+  renders an honest notice; it never rolls publication back.
+- Uploaded items support edit, hide/unhide, sold/relist and photo replacement with all
+  existing S8 event/generation/no-op invariants preserved.
+- Image replacement returns search state to pending/stale-excluded behavior until the
+  separate indexing action succeeds.
+- Only items explicitly carrying `merchant_upload is True` expose or accept mutation.
+- Direct mutation POSTs against any committed museum item fail without changing rows,
+  events, generations, embeddings or media.
+- Museum detail pages retain existing CMA/CC0 provenance, original title, measurements,
+  fine print and source link.
+- Uploaded-item detail pages contain none of those unsupported museum assertions and
+  explicitly identify the local-demo upload origin and limitations.
+- Footer/catalog/credits/public-claim wording accurately scopes CMA/CC0 claims to the
+  committed museum collection and separately acknowledges local demo uploads.
+- Credits remain museum-source-only.
+- Anonymous storefront traffic remains `pitch_demo`; authenticated storefront traffic
+  remains `merchant_self`.
+- `make demo` bootstraps the pristine isolated runtime if it does not yet exist.
+- Re-running `make demo` preserves existing local demo uploads/mutations rather than
+  silently resetting them.
+- `make demo-reset` touches only the dedicated demo runtime root and safely requires the
+  demo server not to be actively using it.
+- After reset, uploads/media/mutations/sessions/telemetry are gone and the 90-item /
+  90-ready baseline plus demo/demo credential is restored.
+- Reset does not touch model weights, committed files, generic local platform state,
+  another store or configured production state.
+- No dependency, migration, architecture boundary, telemetry event type, search redesign
+  or weakened isolation/security invariant is introduced.
+- `make check PYTHON=.venv/bin/python` passes.
+- Existing blanket "demo is read-only" tests are replaced/refined into explicit
+  composition cases: the interactive demo permits only uploaded-item mutation, and
+  generic composition keeps demo stores read-only.
+- The normal customer Form & Field demo journeys remain working end to end.
+
+**Composition and deletion boundaries.** S11 is an explicit local-demo composition
+exception. It does not weaken production demo or publication semantics: the capability
+is a constructor argument that generic startup never passes, the demo store stays
+read-only everywhere else, and no store field, environment variable, hostname or
+database fact can enable it. Deleting the isolated disposable demo runtime is not a
+production catalog deletion path; committed catalogs still append item events and never
+hard-delete, and `make demo-reset` operates on one ignored directory whose name it
+verifies before removal.
+
+**Documentation.** `MAP.md`, `STATUS.md`, `README.md`, `OPERATIONS.md`, `CREDENTIALS.md`,
+`apps/web/README.md`.

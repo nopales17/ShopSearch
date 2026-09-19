@@ -125,6 +125,11 @@ class ManagedItem:
     price: Decimal | None
     listing_state: ListingState
     index_state: IndexState
+    # S11: the explicit discriminator between a committed museum record and an item
+    # a merchant published through the photo+price path. Museum objects stay read-only
+    # in the interactive demo, so `merchant_upload` is a catalog fact, not a UI hint.
+    merchant_upload: bool = False
+    index_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -632,6 +637,8 @@ class CatalogRepository:
                         model_revision=model_revision,
                         dimensions=dimensions,
                     ),
+                    merchant_upload=_is_merchant_upload(row),
+                    index_error=row["index_error"],
                 )
             )
         return tuple(managed)
@@ -660,7 +667,28 @@ class CatalogRepository:
             index_state=_effective_index_state(
                 row, model_id=model_id, model_revision=model_revision, dimensions=dimensions
             ),
+            merchant_upload=_is_merchant_upload(row),
+            index_error=row["index_error"],
         )
+
+    def item_is_merchant_upload(self, scope: StoreScope, item_id: str) -> bool:
+        """True only for this store's own item published through the merchant upload path.
+
+        The interactive local demo uses `attributes["merchant_upload"] is True` as the
+        immediate discriminator between a committed museum record and a merchant's own
+        upload. This is not a general content-origin framework: it answers one narrow
+        question for one caller, and an unknown or foreign item answers `False`.
+        """
+
+        row = (
+            self._database.connection()
+            .execute(
+                "SELECT attributes_json FROM items WHERE store_id = ? AND item_id = ?",
+                (scope.store_id, item_id),
+            )
+            .fetchone()
+        )
+        return row is not None and _is_merchant_upload(row)
 
     # -- internals ----------------------------------------------------------
 
@@ -1411,6 +1439,8 @@ class CatalogRepository:
                        items.listing_state AS listing_state,
                        items.index_state AS index_state,
                        items.index_attempts AS index_attempts,
+                       items.index_error AS index_error,
+                       items.attributes_json AS attributes_json,
                        images.sha256 AS image_sha256,
                        embeddings.dim AS dim,
                        embeddings.model_id AS model_id,
@@ -1618,3 +1648,16 @@ def _effective_index_state(
     if has_row or stored in (IndexState.READY, IndexState.STALE):
         return IndexState.STALE
     return stored
+
+
+def _is_merchant_upload(row: sqlite3.Row) -> bool:
+    """The narrow S11 discriminator: this row was published through the upload path."""
+
+    raw = row["attributes_json"]
+    if raw is None:
+        return False
+    try:
+        attributes = json.loads(raw)
+    except (TypeError, ValueError):
+        return False
+    return isinstance(attributes, dict) and attributes.get("merchant_upload") is True

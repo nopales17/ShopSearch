@@ -408,7 +408,15 @@ class MerchantShellTest(unittest.TestCase):
             server.server_close()
             thread.join(timeout=2)
 
-    def test_demo_store_item_pages_are_read_only(self) -> None:
+    def test_generic_composition_keeps_demo_store_item_pages_read_only(self) -> None:
+        """A demo store is read-only in every composition that is not the explicit demo.
+
+        This application is built by `create_pitch_app` without the interactive-demo
+        capability, exactly like production `serve()`. A demo merchant account exists
+        here on purpose: authentication alone must never enable demo mutation. The
+        interactive composition is covered by `tests/acceptance/test_interactive_demo.py`.
+        """
+
         visitor = self.app.test_client()
         login = self.login(DEMO_HOST, "dana", DEMO_PASSWORD, client=visitor)
         self.assertEqual(login.status_code, 303)

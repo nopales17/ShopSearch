@@ -11,13 +11,18 @@ from backend.stores.demo import load_demo_store
 from backend.stores.validation import StoreValidationError, validate_store
 from contracts.store import Store
 
-# SHA-256 of the four deterministic pages rendered at S1 commit 71aac18, captured
-# before pitch_views.py was changed. Byte-identity is a documented S2 criterion.
+# SHA-256 of the four deterministic pages. These were captured at S1 commit 71aac18
+# and pinned as the S2 byte-identity criterion; S11 deliberately revised the demo
+# store's public-copy fields (meta description, footer disclosure, catalog disclaimer,
+# credits copy, public claim) so that CMA/CC0 attribution is scoped to the committed
+# museum collection and locally uploaded demo items are described separately. The
+# museum detail body itself is unchanged: `item` differs only by the shared page
+# meta description. Update these hashes only with a reviewed copy change like that one.
 S1_PAGE_HASHES = {
-    "home": "d7d863ff4d775e0f9b0cbe1e75f007252077483f04b0ef6a50f763dcbde16ac2",
-    "catalog": "72728b9e964018027b5a52d8f88b24b7636a1da1c964cb24a8db04b1bf691d94",
-    "credits": "369b0906200cda396b4bb867a26ea8b032c943371e2456c89282eb80d2cc6754",
-    "item": "c7477db76113da22188db5dac07ac35c6144695ae463a20e0d4d6dca1c4f9ce3",
+    "home": "4748328b6f05c46e90a105ef06d78e24d475d75f35d27c40333aa37789743f94",
+    "catalog": "f260dcecf99065f4924d0155ccea2f78ae2a6c342fcbd2b65ad062c5503c2c71",
+    "credits": "f1b5c7c2849309f0ed218b0306225b75cbca809d47c97f8ba5be794049c057b7",
+    "item": "9b63826d2089d09aeb206089a2e47e2d200b1b9c775b0dada18d70c8abad7f2c",
 }
 
 # Distinctive demo-store strings that must now live in the store record, not the
@@ -136,3 +141,74 @@ class StoreLiteralScanTest(unittest.TestCase):
         for literal in DEMO_VIEW_LITERALS:
             with self.subTest(literal=literal):
                 self.assertNotIn(literal, source)
+
+
+class MixedProvenanceRenderingTest(unittest.TestCase):
+    """S11: a locally uploaded demo item never inherits museum attribution.
+
+    `attributes["merchant_upload"] is True` is the explicit branch. The wording itself
+    still comes from the store record, so the view module keeps no Form & Field copy.
+    """
+
+    def setUp(self) -> None:
+        self.store = load_demo_store()
+        self.catalog = load_pitch_catalog(
+            ROOT / "data/pitch/catalog.json", self.store.configuration()
+        )
+        museum = self.catalog.get("pitch-128096")
+        assert museum is not None
+        self.uploaded = replace(
+            museum,
+            item_id="local-upload-1",
+            title="Local uploaded bowl",
+            category="Demo uploads",
+            attributes={"source_title": "Local uploaded bowl", "merchant_upload": True},
+        )
+
+    def test_demo_upload_renders_only_the_local_demo_wording(self) -> None:
+        page = views.item_page(self.uploaded, self.store, "", None)
+        detail = page.split('<div class="detail-copy">')[1].split("</main>")[0]
+        self.assertIn("Uploaded through the local merchant demo", detail)
+        self.assertIn("not part of the committed museum collection", detail)
+        for forbidden in (
+            "Original title",
+            "Dimensions",
+            "Cleveland Museum of Art",
+            "CC0",
+            "View the original source",
+            "accession",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, detail)
+
+    def test_museum_item_keeps_its_attribution(self) -> None:
+        museum = self.catalog.get("pitch-128096")
+        assert museum is not None
+        detail = (
+            views.item_page(museum, self.store, "", None)
+            .split('<div class="detail-copy">')[1]
+            .split("</main>")[0]
+        )
+        self.assertIn("Original title", detail)
+        self.assertIn("Dimensions", detail)
+        self.assertIn("The Cleveland Museum of Art · CC0", detail)
+        self.assertIn("View the original source", detail)
+        self.assertNotIn("Uploaded through the local merchant demo", detail)
+
+    def test_credits_list_stays_museum_source_only(self) -> None:
+        catalog = replace(self.catalog, items=(*self.catalog.items, self.uploaded))
+        page = views.credits(catalog, self.store)
+        self.assertNotIn("Local uploaded bowl", page)
+        self.assertIn(self.catalog.items[0].title, page)
+        self.assertIn("committed museum collection", page)
+
+    def test_other_stores_keep_their_configured_item_wording(self) -> None:
+        presentation = replace(
+            self.store.presentation, item_source_value="Photographed for this store"
+        )
+        other = replace(
+            self.store, store_id="second-store", is_demo=False, presentation=presentation
+        )
+        page = views.item_page(self.uploaded, other, "", None)
+        self.assertIn("Photographed for this store", page)
+        self.assertNotIn("Uploaded through the local merchant demo", page)

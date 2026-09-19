@@ -55,6 +55,32 @@ secret to start (it has no Flask client-side session and no `SECRET_KEY`).
 
 ## What this does not include
 
-No self-service signup, no email or reset links, no roles or permission levels, and no
-publishing or editing. `/manage` is read-only in this slice and lists the store's items
-with their listing and index states.
+No self-service signup, no email or reset links and no roles or permission levels. A
+deployed store's `/manage` can amend, hide, sell, relist and re-photograph that store's
+own published items (S7/S8); a demo store stays read-only in production composition.
+
+## The one local demonstration credential (S11)
+
+`make demo` provisions exactly one extra account, `demo` / `demo`, and only in the
+isolated, disposable local demo runtime at `data/local/form-and-field-demo/`. It is
+created and re-created through this same auth machinery — normal PBKDF2 digest, normal
+sessions, normal throttling, normal CSRF — and `make demo` resets it on each start so
+earlier demo sessions are revoked.
+
+It is a plainly labeled local demonstration credential, and the rules that keep it from
+becoming anything else are:
+
+- the username and password constants live only in the explicit demo composition
+  (`apps/web/demo_runtime.py`), never in `backend/auth` defaults, the store record, store
+  configuration, environment configuration or the deployment files;
+- the deployed runtime never provisions it, never displays it and never accepts it: the
+  credential exists only inside that store's demo database file;
+- the sign-in page shows it only when the explicit interactive-demo capability was passed
+  by `apps/web.demo`, so generic composition reveals nothing;
+- a demo store remains read-only in generic composition even if an account exists for it,
+  so authentication alone never grants demo mutation;
+- `make demo-reset` deletes the whole runtime, including the credential and every session,
+  and rebuilds it.
+
+Do not reuse, rename or deploy this credential for a real store; provision real merchant
+accounts with the CLI above.

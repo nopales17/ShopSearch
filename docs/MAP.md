@@ -46,7 +46,7 @@ shopsearch/
 │   ├── decision/             future SER-style decision logic
 │   └── adapters/             local pinned CLIP encoder/model download
 ├── apps/
-│   └── web/                  Flask/Waitress runtime, storefront, merchant shell, explicit demo
+│   └── web/                  Flask/Waitress runtime, storefront, merchant shell, explicit interactive demo + demo runtime
 ├── data/
 │   ├── demo/                 historical Issue #1 fixture records (no shipping code loads them)
 │   ├── pitch/                90 CC0 photos, source catalog, selection, expansion manifest and index
@@ -69,13 +69,16 @@ the local CLIP adapter; `price.py` enforces supported price phrases independentl
 `apps/web/storefront.py` owns the storefront application and the generic/demo stack
 openers; `apps/web/wsgi.py` is the production HTTP adapter (Flask under Waitress) whose
 `main()` reads `SHOPSEARCH_*` configuration and never provisions a store;
-`apps/web/demo.py` is the explicit developer/demo command; `apps/web/pitch_server.py`
+`apps/web/demo.py` is the explicit interactive developer/demo command and
+`apps/web/demo_runtime.py` owns its dedicated disposable runtime root;
+`apps/web/pitch_server.py`
 retains the S1 stdlib adapter for parity comparison only; `pitch_views.py` and static
 pitch CSS/JS provide the UI. `backend/runtime/config.py` is the typed configuration
 boundary, `backend/platform/health.py` and `backend/platform/operational_log.py` own
 health and structured operational logging, and `backend/ops/` owns the backup/restore
-commands. `data/local/` holds ignored model weights, preparation files, logs and
-content-addressed media derivatives. `data/demo/` remains as Issue #1 history and is no
+commands. `data/local/` holds ignored model weights, preparation files, logs,
+content-addressed media derivatives and the disposable interactive demo runtime root
+(`form-and-field-demo/`). `data/demo/` remains as Issue #1 history and is no
 longer loaded by shipping code. No dataset represents Customer Zero inventory.
 ADR-0002 is historical (S10 retired its runtime); ADR-0004 selects the WSGI runtime.
 
@@ -239,6 +242,30 @@ stdlib adapter, retained for the byte-parity test.
 `tools/expand_pitch_catalog.py` records deterministic CC0 selection in the expansion
 manifest. `experiments/search_v0/evaluate_expanded.py` owns the evaluation-only lexical
 and fixed hybrid comparison; neither is imported by production ranking.
+
+S11 makes the explicit local Form & Field demo interactive without changing production.
+`apps/web/demo_runtime.py` owns the dedicated disposable demo runtime: the ignored
+`data/local/form-and-field-demo/` root (`shopsearch.sqlite3` + `media/`, resolved through
+`backend/platform/paths.py:demo_runtime_paths`), the additive bootstrap that seeds Form &
+Field, imports the committed catalog and embeddings and provisions the local
+`demo`/`demo` credential through the unchanged S6 machinery, the verified reset that
+refuses to race a live demo pid file, and the runtime report used by `make demo` and
+`make demo-reset`. `apps/web/demo.py` is the only caller that passes the explicit
+in-memory `InteractiveDemo` capability (`apps/web/manage.py`) into `create_pitch_app`,
+together with one shared `ClipEncoder` and a narrow index callable built from
+`backend/search/indexer.py:EmbeddingIndexer`. `apps/web/manage.py` and
+`apps/web/manage_views.py` render the publish form, the post-publication "View in
+storefront" / "Make searchable now" confirmation and the index control only under that
+capability, and `backend/catalog/publish.py` refuses demo mutation unless the capability
+was passed and limits every item mutation to items whose
+`attributes["merchant_upload"] is True`
+(`CatalogRepository.item_is_merchant_upload`, `ManagedItem.merchant_upload`).
+`apps/web/pitch_views.py` renders an uploaded demo item with the store record's separate
+`item_upload_source_value` / `item_upload_fine_print_html` wording instead of the museum
+collection's attribution, and the credits list stays museum-source-only.
+`contracts/store.py` gained those two `StorePresentation` fields with defaults;
+`data/stores/pitch-demo.json` carries the Form & Field wording and the revised,
+collection-scoped CMA/CC0 copy.
 
 ## Stability rule
 If files move or module responsibilities change, update this map in the same change.

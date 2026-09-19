@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import secrets
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Callable, Mapping
 from urllib.parse import quote
 
 from apps.web import manage_views as views
@@ -32,9 +32,11 @@ from backend.catalog.store_repository import (
     ManagedItem,
 )
 from backend.media.uploads import UploadError
+from backend.search.indexer import IndexRunReport
 from backend.search.vector_source import EMBEDDING_DIMENSIONS
 from contracts.auth import MerchantSession
-from contracts.store import Store
+from contracts.catalog import IndexState
+from contracts.store import Store, StoreScope
 
 HANDLED_PATHS = (
     views.MANAGE_PATH,
@@ -45,12 +47,32 @@ HANDLED_PATHS = (
 
 _ATTESTED_VALUES = frozenset({"yes", "on", "true", "1"})
 _ITEM_ACTIONS = frozenset({"edit", "listing", "replace"})
+_INDEX_ACTION = "index"
 _LISTING_NOTICES = {
     "hide": "hidden",
     "unhide": "unhidden",
     "sold": "sold",
     "relist": "relisted",
 }
+
+
+@dataclass(frozen=True)
+class InteractiveDemo:
+    """The explicit local-demo capability: sign-in credential and in-memory mutation.
+
+    Constructed only by `apps.web.demo` and passed only into this process's merchant
+    composition. It is never persisted, never carried on the store record, never
+    enabled by an environment variable, and never derived from `Store.is_demo`,
+    hostname, database contents or the existence of a merchant account. Generic
+    composition passes nothing, so Form & Field is read-only there.
+    """
+
+    username: str
+    password: str
+
+    @property
+    def credentials(self) -> tuple[str, str]:
+        return self.username, self.password
 
 
 @dataclass(frozen=True)
@@ -85,6 +107,8 @@ class MerchantShell:
         model_id: str,
         model_revision: str,
         dimensions: int = EMBEDDING_DIMENSIONS,
+        interactive_demo: InteractiveDemo | None = None,
+        index_store: Callable[[StoreScope], IndexRunReport] | None = None,
     ) -> None:
         self._store = store
         self._auth = auth
@@ -93,6 +117,8 @@ class MerchantShell:
         self._model_id = model_id
         self._model_revision = model_revision
         self._dimensions = dimensions
+        self._interactive_demo = interactive_demo
+        self._index_store = index_store
 
     def handles(self, path: str) -> bool:
         return path in HANDLED_PATHS or path.startswith(f"{views.ITEM_PATH}/")
@@ -137,19 +163,27 @@ class MerchantShell:
             # Same response whether the cookie is absent, foreign, expired or revoked.
             return _redirect(views.LOGIN_PATH, cookies=(clear_cookie_header(MERCHANT_COOKIE),))
         notice = ""
+        published_item_id: str | None = None
         published = query.get("published")
         if isinstance(published, str) and published:
             state = self._catalog.item_state(self._store.scope, published)
             if state is not None:
+                published_item_id = state.item_id
                 notice = (
                     f"Those bytes are already published as {state.item_id}. Nothing changed."
                     if query.get("duplicate")
                     else f"Published {state.item_id}."
                 )
-        return self._manage_page(session, notice=notice)
+        return self._manage_page(session, notice=notice, published_item_id=published_item_id)
 
     def _manage_page(
-        self, session: MerchantSession, *, notice: str = "", error: str = "", status: int = 200
+        self,
+        session: MerchantSession,
+        *,
+        notice: str = "",
+        error: str = "",
+        status: int = 200,
+        published_item_id: str | None = None,
     ) -> ShellResponse:
         items = self._catalog.managed_items(
             self._store.scope,
@@ -160,7 +194,14 @@ class MerchantShell:
         return ShellResponse(
             status,
             views.manage_page(
-                self._store, session.identity, items, session.csrf_token, notice=notice, error=error
+                self._store,
+                session.identity,
+                items,
+                session.csrf_token,
+                notice=notice,
+                error=error,
+                interactive_demo=self._interactive_demo is not None,
+                published_item_id=published_item_id,
             ),
         )
 
@@ -215,7 +256,11 @@ class MerchantShell:
         parts = remainder.split("/")
         if len(parts) == 1 and parts[0]:
             item_id, action = parts[0], "view"
-        elif len(parts) == 2 and parts[0] and parts[1] in _ITEM_ACTIONS:
+        elif (
+            len(parts) == 2
+            and parts[0]
+            and (parts[1] in _ITEM_ACTIONS or parts[1] == _INDEX_ACTION)
+        ):
             item_id, action = parts[0], parts[1]
         else:
             return ShellResponse(404, "Not found", content_type="text/plain; charset=utf-8")
@@ -247,7 +292,44 @@ class MerchantShell:
                 400,
                 views.message_page(self._store, "Item", "This request could not be verified."),
             )
+        if action == _INDEX_ACTION:
+            return self._index_item(session, item)
         return self._item_mutation(session, item, action, form, files)
+
+    def _index_item(self, session: MerchantSession, item: ManagedItem) -> ShellResponse:
+        """Interactive-demo-only explicit indexing; never part of generic composition.
+
+        The action is deliberately separate from publication so the demo shows the real
+        contract: publish is immediately browsable, and description search begins only
+        after a valid embedding exists. A failure changes no listing state and never
+        rolls the publication back.
+        """
+
+        if self._interactive_demo is None or self._index_store is None or not item.merchant_upload:
+            return ShellResponse(404, "Not found", content_type="text/plain; charset=utf-8")
+        try:
+            self._index_store(self._store.scope)
+        except Exception as error:  # An indexing failure is reported, never raised on.
+            return self._item_page(
+                session,
+                item,
+                error=f"{views.INDEX_FAILED_NOTICE} ({type(error).__name__})",
+            )
+        refreshed = self._managed_item(item.item_id) or item
+        if refreshed.index_state is IndexState.READY:
+            return _redirect(
+                f"{views.item_path(item.item_id)}?updated={quote('searchable', safe='')}"
+            )
+        return self._item_page(session, refreshed, error=views.INDEX_FAILED_NOTICE)
+
+    def _managed_item(self, item_id: str) -> ManagedItem | None:
+        return self._catalog.managed_item(
+            self._store.scope,
+            item_id,
+            model_id=self._model_id,
+            model_revision=self._model_revision,
+            dimensions=self._dimensions,
+        )
 
     def _item_mutation(
         self,
@@ -312,7 +394,13 @@ class MerchantShell:
         return ShellResponse(
             status,
             views.item_page(
-                self._store, session.identity, item, session.csrf_token, notice=notice, error=error
+                self._store,
+                session.identity,
+                item,
+                session.csrf_token,
+                notice=notice,
+                error=error,
+                interactive_demo=self._interactive_demo is not None,
             ),
         )
 
@@ -330,7 +418,15 @@ class MerchantShell:
         token = secrets.token_urlsafe(CSRF_BYTES)
         return ShellResponse(
             200,
-            views.login_page(self._store, token),
+            views.login_page(
+                self._store,
+                token,
+                demo_credentials=(
+                    self._interactive_demo.credentials
+                    if self._interactive_demo is not None
+                    else None
+                ),
+            ),
             cookies=(login_csrf_cookie_header(token),),
         )
 

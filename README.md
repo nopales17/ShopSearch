@@ -60,10 +60,12 @@ file example; `docs/OPERATIONS.md` documents directories, ownership, backup, res
 the executed local restore drill. No hosting provider, domain, certificate or bucket is
 configured or claimed.
 
-Merchant accounts are founder-provisioned interactively; the service has no committed
-secret and no Flask client-side session.
+Merchant accounts for a deployed store are founder-provisioned interactively; the service
+has no committed secret and no Flask client-side session. The explicit interactive local
+demo adds one plainly labeled `demo`/`demo` demonstration credential
+(`apps/web/demo_runtime.py`) that generic startup never creates or reveals.
 
-## Run the photographic pitch demo (explicit developer path)
+## Run the photographic pitch demo (explicit interactive developer path)
 
 P1 presents a fictional specialty shop, FORM & FIELD, using 90 permitted real-object
 photographs (30 originally curated, 60 mechanically selected) from the Cleveland Museum
@@ -82,18 +84,58 @@ make pitch-setup PYTHON=.venv/bin/python
 make demo PYTHON=.venv/bin/python
 ```
 
-Open `http://127.0.0.1:8000`. Follow “See What's In Store,” then try “small blue one
-under $50,” “simple clear one,” or “colorful.” Price ceilings are deterministic;
-unknown prices are excluded. CLIP ranks image similarity without an LLM. Startup
-warms text inference. The storefront is served by the Flask application in
-`apps/web/wsgi.py` under Waitress, the production HTTP adapter selected in ADR-0004.
-`make demo` (`python -m apps.web.demo`) is the only command that seeds the demo store
-and imports its dataset, embeddings and retrieval index; production startup never does.
-`make pitch` remains an alias. This remains a local demo, not a publicly hosted website.
+`make demo` prints everything it uses:
 
-Storefront events persist to the platform database (`data/local/shopsearch.sqlite3`) in
-the store-scoped telemetry table, keeping the `pitch_demo` classification and
-store/session/search correlation. For another port:
+```
+Form & Field storefront: http://127.0.0.1:8000/
+Merchant sign-in: http://127.0.0.1:8000/manage/login
+Local demonstration credential: demo / demo (local demo only; not a production account)
+```
+
+As a customer, open `http://127.0.0.1:8000`. Follow “See What's In Store,” then try
+“small blue one under $50,” “simple clear one,” or “colorful.” Price ceilings are
+deterministic; unknown prices are excluded. CLIP ranks image similarity without an LLM.
+Startup warms text inference.
+
+As the demo merchant, open `/manage/login` and sign in with `demo` / `demo`. That account
+is created only by the explicit local demo command and is plainly a local demonstration
+credential; it is not a production account, and the deployed runtime never provisions or
+displays it. In the demo you can:
+
+- take or upload one photo with an optional price, title and category, and use the
+  “I just took this photo” capture attestation;
+- see the new item in the storefront immediately — it is browsable, appears in category
+  and price browsing, and is *not yet* searchable by description;
+- press **Make searchable now** on the confirmation page or item page to run the existing
+  indexer on demand, after which the item joins description search;
+- edit title/category/price, hide/unhide, mark sold/relist and replace the photo.
+
+The 90 committed museum objects stay read-only with their Cleveland Museum of Art / CC0
+attribution: only items you upload into the local demo can be changed, and a direct
+request against a museum object is refused server-side.
+
+`make demo` (`python -m apps.web.demo`) is the only command that seeds the demo store,
+imports its dataset and embeddings and provisions the demo credential; production startup
+never does any of that. It runs from the dedicated, ignored demo runtime root
+`data/local/form-and-field-demo/`, so it never touches your generic local platform state
+in `data/local/shopsearch.sqlite3` and `data/local/media/`. **The demo keeps your local
+state between starts:** stop it and run `make demo` again and your uploads and edits are
+still there. To go back to the pristine 90-item baseline (this deletes the local demo
+runtime, so stop the demo first):
+
+```sh
+make demo-reset PYTHON=.venv/bin/python
+```
+
+`make demo-reset` requires the demo not to be running, deletes only the dedicated
+`form-and-field-demo` runtime directory, rebuilds the committed baseline plus the
+`demo`/`demo` credential, verifies the counts and exits without starting the server.
+
+Storefront events persist to that store's telemetry table, keeping the `pitch_demo`
+classification for anonymous traffic and `merchant_self` for a signed-in demo merchant,
+with store/session/search correlation. They are recorded demo interactions, not people,
+demand or customer value. `make pitch` remains an alias, and this remains a local demo,
+not a publicly hosted website. For another port:
 
 ```sh
 .venv/bin/python -m apps.web.demo --port 8018
@@ -122,14 +164,21 @@ queries still return neighbors, and manually tagged lexical search scored higher
 Founder-provisioned merchant accounts sign in at `/manage/login`; `/manage` lists the
 store's items with their listing and index state and publishes a new item from one photo
 plus an optional price, title and category. New items are browsable immediately and
-become searchable by description after the next `make`-level indexer run
-(`.venv/bin/python -m backend.search.indexer --store-id live-store`).
+become searchable by description after the next indexer run
+(`.venv/bin/python -m backend.search.indexer --store-id live-store`), or — inside the
+interactive local demo only — through the **Make searchable now** action.
+
+A live store's merchant accounts are provisioned by the founder, interactively, and are
+unrelated to the local `demo` / `demo` demonstration account. The demo credential lives
+only in the explicit demo composition: the store record, the environment configuration,
+the deployment files and the founder CLI never create it, and a demo store stays
+read-only in production composition even if an account exists for it.
 
 ```sh
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo create --username alice
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo list
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo disable --username alice
-.venv/bin/python -m backend.auth.cli --store-id pitch-demo reset --username alice
+.venv/bin/python -m backend.auth.cli --store-id live-store create --username alice
+.venv/bin/python -m backend.auth.cli --store-id live-store list
+.venv/bin/python -m backend.auth.cli --store-id live-store disable --username alice
+.venv/bin/python -m backend.auth.cli --store-id live-store reset --username alice
 ```
 
 Passwords are entered at an interactive prompt and never as arguments. The merchant

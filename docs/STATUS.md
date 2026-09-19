@@ -139,6 +139,34 @@ runtime directories, ownership, commands and the executed local restore drill. T
 pitch-demo retrieval-index artifact is now an import/parity input for the demo path only:
 a platform store no longer reads it at startup and no longer carries a fabricated
 `retrieval_index_sha256` on live events.
+S11 makes the explicit local Form & Field demo interactive and gives it a disposable
+runtime. `apps/web/demo_runtime.py` owns the dedicated ignored root
+(`data/local/form-and-field-demo/` with `shopsearch.sqlite3` and `media/`), the additive
+bootstrap, the `demo`/`demo` local demonstration credential (provisioned through the
+unchanged S6 hash/session machinery) and the verified reset. `apps/web/demo.py` serves
+the storefront only from that root and is the only caller that passes the explicit
+in-memory interactive-demo capability. That capability is a constructor argument in the
+merchant composition: it is not persisted, not a store field, not an environment
+variable, and not derived from `Store.is_demo`, hostname, database contents or the
+existence of the demo merchant, so generic `make serve`, `open_platform_stack()` and an
+ordinary `create_pitch_app()` still never provision the credential, never reveal it on
+the sign-in page and never enable demo mutation. Inside the interactive demo a merchant
+publishes one photograph with an optional price/title/category through the unchanged S7
+pipeline; the item is browsable immediately and stays `pending` until an explicit
+POST-only, CSRF-protected "Make searchable now" action runs the existing
+`EmbeddingIndexer` with the shared demo encoder. Publication is never rolled back by an
+indexing failure, which is recorded as `failed` with its error and disclosed honestly.
+Every item mutation is server-side limited to items whose
+`attributes["merchant_upload"] is True`, so the committed 90 museum records stay
+read-only and keep their CMA/CC0 attribution, original title, measurements, source link
+and fine print; uploaded demo items render separate local-demo wording from two new
+store-presentation fields. The demo store's footer, catalog disclaimer, credits copy,
+meta description and public claim now scope CMA/CC0 to the committed museum collection
+and acknowledge local uploads separately, and the credits list stays museum-source-only.
+`make demo` preserves an existing runtime (uploads and mutations); `make demo-reset`
+refuses to touch a runtime whose recorded demo process is still alive, then deletes only
+that one verified directory, rebuilds the 90-item / 90-ready-embedding baseline plus the
+credential and exits without starting the server.
 
 ## Verification
 236 unit/HTTP acceptance tests pass locally, including rendered-link navigation,
@@ -240,6 +268,35 @@ unknown-store rows and a hostname claimed by two stores are rejected at the sche
 The persistence import boundary now also fails if the raw connection factory escapes the
 repository layer, with the one repository-composition exception
 (`backend/auth/service.py`, which executes no SQL) pinned by test.
+S11 adds the interactive-demo acceptance suite and the dedicated-runtime unit suite
+(`tests/acceptance/test_interactive_demo.py`, `tests/unit/test_demo_runtime.py`): the
+sign-in page shows demo/demo only in the interactive composition; generic composition
+refuses publish and every item mutation even with a real demo merchant account and
+session, and exposes no index action; a valid upload creates exactly one item, image,
+event and catalog-generation bump, is browsable immediately and stays `pending`; visual
+text excludes it and reports published/ready/excluded-unindexed counts before indexing
+and includes it with `excluded_unindexed=0` afterwards; "Make searchable now" is
+POST-only, authenticated and CSRF-protected, adds no catalog event, does not bump the
+catalog generation and bumps only the index generation; index failure leaves the item
+published and browsable with a recorded error and an honest notice; uploaded items
+support edit, hide/unhide, sold/relist and photo replacement with the existing S8
+invariants, with replacement returning the item to `pending` and excluded until
+reindexed; edit/listing/photo-replacement/index POSTs against every committed museum item
+fail with rows, item events, generations, embeddings and media bytes unchanged; uploaded
+and museum detail pages render their own provenance; anonymous and authenticated
+storefront traffic stay `pitch_demo` and `merchant_self`; bootstrap creates and
+re-bootstrap preserves the pristine baseline (90 items, 90 ready embeddings, unchanged
+IDs, prices, images, source URLs, licenses and museum metadata, verified credential);
+reset removes uploads, media, sessions and telemetry and restores the pristine media
+digest; reset refuses a runtime whose demo pid is alive and any directory not named
+`form-and-field-demo`, treats a stale pid file as stopped, and leaves a sibling generic
+runtime database and media byte-identical.
+`tests/unit/test_store_presentation.py` updates the pinned demo page hashes for the
+S11 copy revision (the museum detail body still renders identically; `item` differs only
+by the shared page meta description) and adds mixed-provenance rendering tests. The
+blanket "demo is read-only" tests in `tests/acceptance/test_merchant_shell.py` and
+`tests/acceptance/test_merchant_publish.py` are refined into explicit generic-composition
+cases. All 259 tests pass locally.
 S10 adds runtime and operations coverage: production startup serves the two-store
 isolation shape from `open_platform_stack()` with no demo store in the registry, while
 the registered demo hostname keeps returning the store-free 404; the platform runtime
@@ -287,6 +344,21 @@ A's CSRF token was rejected, and store B's session could not edit or hide a stor
 item, leaving both stores' item/image/event counts and generation pairs unchanged. The
 S9 commit f9f8f67 passed both the 3.11 and 3.12 CI jobs, and the S10 commit c173394
 passed both as well.
+S11 was verified by the two new suites above and by a bounded local smoke of the real
+command over loopback with the pinned CLIP runtime on 2026-09-18 (a stale pre-S11 demo
+server held port 8000, so the same command ran on a free port): startup printed the
+storefront URL, `/manage/login`, demo/demo and the verified 90-item / 90-ready baseline
+from `data/local/form-and-field-demo`; the sign-in page showed the credential and
+demo/demo signed in; a published upload created one item and was browsable while absent
+from visual text with coverage published=91/ready=90/excluded-unindexed=1; the
+confirmation page carried "View in storefront" and "Make searchable now"; both worked;
+the same query returned the item after explicit indexing with
+published=91/ready=91/excluded-unindexed=0; `make demo-reset` refused while the demo was
+running (exit 2, "still using") and afterwards rebuilt and verified the pristine
+baseline, leaving the generic local platform database byte-identical. This smoke was run
+with the S11 working tree, not from a committed revision, and it is a local
+implementation check rather than evidence about a customer, merchant, demand or
+availability.
 P1 now records `homepage_viewed`, and `backend/telemetry/report.py` produces a
 read-only local demo funnel report with explicit denominators. Incomplete search
 traces are correlated per session/search ID and reported separately from `zero_results`
@@ -371,6 +443,20 @@ outcome. Publishing bumps the S4 catalog generation
 represented-catalog version string unchanged, because search telemetry and the demo
 import bind to that version. No merchant-labor measurement was recorded for S7, so
 PRODUCT.md is unchanged.
+The interactive demo's `demo`/`demo` credential is deliberately weak, printed at startup
+and displayed on the sign-in page; it exists only in the explicit local composition and
+is re-provisioned through the normal S6 machinery on every `make demo` start (which
+revokes previous demo sessions). It is not a production credential and must never be
+used for a deployed store. Because the merchant cookie is `Secure`, a browser completes
+the demo sign-in on a localhost origin over HTTP or on HTTPS; the real-loopback smoke
+above passed the cookie explicitly because its raw HTTP client is not a browser. The
+demo runtime is disposable ignored local state with no backup or migration path: only
+the committed 90-item baseline and the credential are expected to be reproducible, and
+`make demo-reset` deletes the whole root by design. Only one local demo process should
+use a runtime at a time; the recorded pid file is what makes a concurrent reset refuse,
+and it is not a general lock service. `data/local/shopsearch.sqlite3` and
+`data/local/media/` remain the generic local platform state and are untouched by the
+demo.
 Funnel reporting covers recorded local demo and store traffic only; public-telemetry
 retention, access and notice decisions remain unresolved.
 
@@ -413,14 +499,21 @@ and environment-configured, `/health` reports real database and media reachabili
 operational logs are separate from telemetry, the operator backup/restore commands with
 a nightly systemd timer and provider-neutral deployment templates are in place with an
 executed local restore drill, and the superseded Issue #1 fixture runtime is retired with
-ADR-0002 marked historical. The S1–S10 platform transition is complete in the repository.
+ADR-0002 marked historical. S11 is implemented: the explicit local Form & Field demo is
+interactive from its own disposable runtime with a local-only demo/demo credential,
+uploaded demo items can be published, browsed before indexing, explicitly made searchable
+and edited through the existing S8 operations, the committed museum corpus stays
+read-only with its CMA/CC0 provenance, and generic production composition is unchanged
+and still unable to enable demo mutation. The S1–S10 platform transition is complete in
+the repository and S11 is complete.
 
 ## Active acceptance criteria
 See `docs/SLICES.md` for per-slice acceptance criteria of the platform transition, and PRODUCT for the release contract. The local foundation and generic pitch are verified. The store release still needs verified business content, >=30 permitted store-item images, store-specific retrieval evaluation, supported production freshness wording, complete discovery reporting and deployment.
 
 ## Single next trunk task
-The S1–S10 platform transition is complete, so there is no authorized implementation
-slice to start. The next trunk task is founder-owned and external: record the prospective
+The S1–S10 platform transition is complete and the authorized S11 interactive-demo
+slice is implemented, so there is no further authorized implementation slice to start.
+The next trunk task is founder-owned and external: record the prospective
 owner's stated requirements, objections, pricing discussion and permission (or refusal)
 to photograph and publish merchandise, then decide the hosting provider, domain, TLS and
 an independent off-host backup destination, and resolve public-telemetry retention,

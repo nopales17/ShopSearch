@@ -421,7 +421,13 @@ class MerchantPublishTest(unittest.TestCase):
         self.assertEqual(self.counts(self.live), before)
         self.assertEqual(self.counts(self.demo), demo_before)
 
-    def test_demo_store_has_no_publish_form_and_cannot_publish(self) -> None:
+    def test_generic_composition_gives_the_demo_store_no_publish_form(self) -> None:
+        """Without the explicit interactive-demo capability the demo cannot publish.
+
+        The merchant account created in `setUp` proves the rule is compositional rather
+        than credential-based: authenticating successfully still changes nothing here.
+        """
+
         visitor = self.app.test_client()
         self.login(DEMO_HOST, "dana", DEMO_PASSWORD, client=visitor)
         page = visitor.get("/manage", base_url=DEMO_HOST)

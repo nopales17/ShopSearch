@@ -109,6 +109,15 @@ class StorePresentation:
     item_description_plain: str = (
         "A closer look at the color, texture and details that make this object distinctive."
     )
+    # S11 mixed-provenance wording. The committed museum collection and locally
+    # uploaded demo items are described separately, so an uploaded item never
+    # inherits a museum attribution it does not have. Defaults keep store records
+    # written before S11 valid; the Form & Field demo record owns its wording.
+    item_upload_source_value: str = "Uploaded through the local merchant demo"
+    item_upload_fine_print_html: str = (
+        "This locally uploaded demo item is not part of the committed museum collection. "
+        "No live availability or real-business contact is asserted."
+    )
 
 
 @dataclass(frozen=True)

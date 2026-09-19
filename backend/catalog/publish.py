@@ -85,7 +85,16 @@ def parse_price_input(value: object) -> Decimal | None:
 
 
 class MerchantPublisher:
-    """The narrow S7 publication operation for exactly one store."""
+    """The narrow S7 publication operation for exactly one store.
+
+    `interactive_demo` is the explicit local Form & Field demo capability. It is never
+    persisted, never derived from the store record, hostname or database contents, and
+    is only ever passed by `apps.web.demo`. Generic composition leaves it `False`, so a
+    demo store stays read-only there even if a merchant account exists for it. Inside
+    the interactive demo it additionally limits every item mutation to items published
+    through the merchant upload path, because a committed museum record has no truthful
+    merchant-editable provenance.
+    """
 
     def __init__(
         self,
@@ -93,11 +102,13 @@ class MerchantPublisher:
         catalog_repository: CatalogRepository,
         image_store: ImageStore,
         *,
+        interactive_demo: bool = False,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._store = store
         self._catalog = catalog_repository
         self._image_store = image_store
+        self._interactive_demo = interactive_demo
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     def publish(
@@ -111,13 +122,10 @@ class MerchantPublisher:
         category: object,
         attested_capture: bool,
     ) -> PublishedItem:
-        if not merchant_id:
-            raise PublishError("A merchant session is required.")
-        if self._store.is_demo:
-            # The demo store's mandatory CC0/not-for-sale wording must not be mixed
-            # with merchant merchandise (ADR-0005 §8).
-            raise PublishError("This storefront is an illustrative demo and cannot publish items.")
-        scope = self._store.scope
+        # Outside the explicit interactive demo, the demo store's mandatory
+        # CC0/not-for-sale wording must not be mixed with merchant merchandise
+        # (ADR-0005 §8).
+        scope = self._require_publication(merchant_id)
         store_timezone = ZoneInfo(self._store.timezone)
         price_value = parse_price_input(price)
         title_text = _clean_text(title, MAX_TITLE_LENGTH) or UNKNOWN_TITLE
@@ -191,7 +199,7 @@ class MerchantPublisher:
     ) -> MutationResult:
         """Amend one item's title, category and price (blank price means unknown)."""
 
-        scope = self._require_live(merchant_id)
+        scope = self._require_item_mutation(merchant_id, item_id)
         price_value = parse_price_input(price)
         return self._catalog.update_item_metadata(
             scope,
@@ -208,7 +216,7 @@ class MerchantPublisher:
     ) -> MutationResult:
         """Apply one named listing action; the repository refuses anything else."""
 
-        scope = self._require_live(merchant_id)
+        scope = self._require_item_mutation(merchant_id, item_id)
         target = LISTING_ACTIONS.get(str(action))
         if target is None:
             raise PublishError("That action is not available.")
@@ -227,7 +235,9 @@ class MerchantPublisher:
     ) -> ImageReplacement:
         """Swap one item's current image through the S7 upload pipeline."""
 
-        scope = self._require_live(merchant_id)
+        # The item check runs before any validation or blob write, so a refused
+        # mutation of a committed museum record leaves media untouched too.
+        scope = self._require_item_mutation(merchant_id, item_id)
         store_timezone = ZoneInfo(self._store.timezone)
         upload = validate_upload(
             photo, declared_content_type=declared_content_type, store_timezone=store_timezone
@@ -289,12 +299,25 @@ class MerchantPublisher:
             return
         self._image_store.delete(scope, display_sha256, DISPLAY_VARIANT)
 
-    def _require_live(self, merchant_id: str) -> StoreScope:
+    def _require_publication(self, merchant_id: str) -> StoreScope:
         if not merchant_id:
             raise PublishError("A merchant session is required.")
-        if self._store.is_demo:
-            raise PublishError("This storefront is an illustrative demo and cannot be edited.")
+        if self._store.is_demo and not self._interactive_demo:
+            raise PublishError(
+                "This storefront is an illustrative demo and cannot publish or change items."
+            )
         return self._store.scope
+
+    def _require_item_mutation(self, merchant_id: str, item_id: str) -> StoreScope:
+        """The scope for one item mutation, or a refusal that changes nothing."""
+
+        scope = self._require_publication(merchant_id)
+        if self._interactive_demo and not self._catalog.item_is_merchant_upload(scope, item_id):
+            raise PublishError(
+                "This committed museum object is read-only in the demo. "
+                "Only items uploaded through the local merchant demo can be changed."
+            )
+        return scope
 
     def _capture_provenance(
         self,

@@ -21,13 +21,13 @@ from http import HTTPStatus
 from http.client import HTTPMessage
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 import waitress
 from flask import Flask, Response, g, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from apps.web.manage import MerchantShell, ShellResponse, UploadedPhoto
+from apps.web.manage import InteractiveDemo, MerchantShell, ShellResponse, UploadedPhoto
 from apps.web.storefront import (
     PitchApplication,
     StorefrontStack,
@@ -42,6 +42,7 @@ from backend.platform import operational_log
 from backend.platform.health import RuntimeHealth
 from backend.platform.paths import DEFAULT_DEVELOPMENT_HOSTS_PATH
 from backend.runtime.config import RuntimeConfig
+from backend.search.indexer import IndexRunReport
 from backend.search.multimodal import TextEncoder
 from backend.search.vector_source import VectorCache
 from backend.stores.resolver import HostResolver, load_development_hosts
@@ -227,6 +228,8 @@ def create_pitch_app(
     *,
     stack: StorefrontStack | None = None,
     logger: Any | None = None,
+    interactive_demo: InteractiveDemo | None = None,
+    index_store: Callable[[StoreScope], IndexRunReport] | None = None,
 ) -> Flask:
     """Return the Flask application serving host-resolved storefronts.
 
@@ -237,6 +240,11 @@ def create_pitch_app(
     This function opens the configured backends through `open_platform_stack` and
     never seeds a store: callers that want the pitch demo pass an explicitly opened
     demo stack (`apps.web.storefront.open_demo_stack`).
+
+    `interactive_demo` is the explicit in-memory Form & Field demo capability. Only
+    `apps.web.demo` passes it, and it is the sole way any storefront composition can
+    enable merchant mutation of demo items. Everything else, including production
+    `serve()`, leaves it unset and therefore keeps demo stores read-only.
     """
 
     stack = stack or open_platform_stack(database_path, media_root)
@@ -262,7 +270,12 @@ def create_pitch_app(
             existing = shells.get(store.store_id)
             if existing is not None:
                 return existing
-            publisher = MerchantPublisher(store, stack.catalog_repository, stack.image_store)
+            publisher = MerchantPublisher(
+                store,
+                stack.catalog_repository,
+                stack.image_store,
+                interactive_demo=interactive_demo is not None,
+            )
             shell = MerchantShell(
                 store,
                 stack.auth_stores.for_store(store),
@@ -270,6 +283,8 @@ def create_pitch_app(
                 publisher,
                 model_id=MODEL_ID,
                 model_revision=MODEL_REVISION,
+                interactive_demo=interactive_demo,
+                index_store=index_store,
             )
             shells[store.store_id] = shell
             return shell

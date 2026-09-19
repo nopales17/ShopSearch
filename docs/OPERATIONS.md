@@ -94,7 +94,8 @@ the explicit demo command below.
 | Command | Purpose |
 | --- | --- |
 | `make serve PYTHON=.venv/bin/python` | production WSGI process from `SHOPSEARCH_*` configuration |
-| `make demo PYTHON=.venv/bin/python` | explicit local Form & Field demo (seeds/imports the pitch data) |
+| `make demo PYTHON=.venv/bin/python` | explicit interactive local Form & Field demo (seeds/imports the pitch data into its own runtime root) |
+| `make demo-reset PYTHON=.venv/bin/python` | delete only the dedicated demo runtime root and rebuild the pristine baseline |
 | `make backup PYTHON=.venv/bin/python` | consistent snapshot + media synchronisation + verification |
 | `make restore PYTHON=.venv/bin/python` | restore a snapshot onto a clean destination |
 | `.venv/bin/python -m backend.search.indexer --store-id <id>` | process `pending`/`failed` items |
@@ -113,6 +114,36 @@ datum or secret is returned, and health probes write no telemetry.
 ```
 curl -sS -i https://store.example.com/health
 ```
+
+## Interactive local demo runtime (`make demo` / `make demo-reset`)
+
+The interactive Form & Field demo is the one deliberately disposable runtime. Its
+database, media and process record live in an ignored, dedicated root that is never
+shared with the production or generic local paths:
+
+```
+data/local/form-and-field-demo/
+├── shopsearch.sqlite3     demo store record, committed catalog, uploads, telemetry
+├── media/                 content-addressed demo derivatives
+└── demo.pid               recorded while a demo process owns this runtime
+```
+
+`make demo PYTHON=.venv/bin/python` starts the demo from that root. If it does not exist
+it is created, Form & Field is seeded, the committed 90-item catalog and its 90 embeddings
+are imported, and the local `demo`/`demo` credential is provisioned through the normal
+merchant-auth machinery. If it does exist, local uploads and edits are preserved and only
+the credential is re-established, which revokes earlier demo sessions. Startup prints the
+storefront URL, the merchant sign-in URL and the credential.
+
+`make demo-reset PYTHON=.venv/bin/python` stops nothing, but refuses to run while the
+recorded demo process is alive. It then deletes only `data/local/form-and-field-demo/`,
+rebuilds the pristine 90-item / 90-ready-embedding baseline plus the credential, verifies
+the counts and the credential, prints them, and exits without starting the server. It
+never touches `data/local/shopsearch.sqlite3`, `data/local/media/`, model weights,
+committed files, another store or any configured production path. It is not a production
+catalog deletion path: production catalogs append item events and never hard-delete. A
+stale `demo.pid` left by a crashed demo is treated as stopped, and the command refuses any
+directory whose name is not `form-and-field-demo`.
 
 ## Operational logging
 

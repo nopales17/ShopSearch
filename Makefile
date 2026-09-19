@@ -1,11 +1,14 @@
 PYTHON ?= python3
-.PHONY: serve demo pitch pitch-setup pitch-eval report backup restore test check
+.PHONY: serve demo demo-reset pitch pitch-setup pitch-eval report backup restore test check
 
 serve:
 	$(PYTHON) -m apps.web.wsgi
 
 demo:
 	$(PYTHON) -m apps.web.demo
+
+demo-reset:
+	$(PYTHON) -m apps.web.demo_runtime
 
 pitch: demo
 

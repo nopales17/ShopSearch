@@ -106,11 +106,31 @@ def item_page(item: CatalogItem, store: Store, query: str, search_id: str | None
         else presentation.item_description_plain
     )
     source_url = str(source.get("source_url") or "").strip()
-    source_link = (
-        f'<a class="text-link" href="{escape(source_url)}" target="_blank" rel="noopener noreferrer">{presentation.item_source_link_label} ↗</a>'
-        if source_url
-        else ""
-    )
+    # S11 mixed provenance: inside the demo, an item the merchant uploaded is rendered
+    # as a local demo upload. It never inherits the committed museum collection's
+    # original title, measurements, CMA/CC0 attribution, accession or source link.
+    local_demo_upload = store.is_demo and source.get("merchant_upload") is True
+    if local_demo_upload:
+        details = (
+            f"<dl><div><dt>Photo source</dt>"
+            f"<dd>{escape(presentation.item_upload_source_value)}</dd></div></dl>"
+        )
+        fine_print = presentation.item_upload_fine_print_html
+        source_link = ""
+    else:
+        details = (
+            f"<dl><div><dt>Original title</dt>"
+            f"<dd>{escape(source.get('source_title') or item.title or '')}</dd></div>"
+            f"<div><dt>Dimensions</dt>"
+            f"<dd>{escape(source.get('measurements') or 'Not recorded in this source')}</dd></div>"
+            f"<div><dt>Photo source</dt><dd>{presentation.item_source_value}</dd></div></dl>"
+        )
+        fine_print = presentation.item_fine_print_html
+        source_link = (
+            f'<a class="text-link" href="{escape(source_url)}" target="_blank" rel="noopener noreferrer">{presentation.item_source_link_label} ↗</a>'
+            if source_url
+            else ""
+        )
     return page(
         store,
         item.title or "Object",
@@ -118,9 +138,9 @@ def item_page(item: CatalogItem, store: Store, query: str, search_id: str | None
     <main class="detail-main"><a class="back-link" href="/catalog?{escape(params)}">← Back to the collection</a><div class="detail-layout"><div class="detail-image"><img src="{escape(item.image_uri or "")}" alt="{escape(item.title or "")}" width="900" height="1000"></div>
     <div class="detail-copy"><p class="eyebrow">{escape(item.category or "")} / {presentation.item_collection_suffix}</p><h1>{escape(item.title or "")}</h1><p class="detail-price">{price} <span>{presentation.item_price_label}</span></p>
     <p class="detail-description">{escape(description)}</p>
-    <dl><div><dt>Original title</dt><dd>{escape(source.get("source_title") or item.title or "")}</dd></div><div><dt>Dimensions</dt><dd>{escape(source.get("measurements") or "Not recorded in this source")}</dd></div><div><dt>Photo source</dt><dd>{presentation.item_source_value}</dd></div></dl>
+    {details}
     <div class="detail-actions"><button class="primary demo-action" data-kind="call" data-item="{item.item_id}" data-search="{escape(search_id or "")}">Call the shop <span>↗</span></button><button class="secondary demo-action" data-kind="directions" data-item="{item.item_id}" data-search="{escape(search_id or "")}">Get directions <span>↗</span></button></div>
-    <p class="fine-print">{presentation.item_fine_print_html}</p>{source_link}</div></div></main>''',
+    <p class="fine-print">{fine_print}</p>{source_link}</div></div></main>''',
     )
 
 
@@ -176,6 +196,7 @@ def credits(catalog: LoadedCatalog, store: Store) -> str:
         f'<li><a href="{escape(item.attributes["source_url"])}">{escape(item.title or "")}</a> — {escape(item.attributes["accession_number"])} · {escape(item.attributes["license"])}</li>'
         for item in catalog.items
         if str(item.attributes.get("source_url") or "").strip()
+        and item.attributes.get("merchant_upload") is not True
     )
     return page(
         store,
